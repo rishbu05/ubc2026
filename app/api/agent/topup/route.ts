@@ -4,8 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { PublicKey } from "@solana/web3.js";
 import { getDelegation, topUpFromDelegate } from "@/lib/delegate";
 
-// TODO: authenticate this route before anything beyond the demo. As written, anyone can trigger
-// a top-up into the agent wallet, up to the owner's approved allowance.
+// Protected by proxy.ts: requires header x-agent-secret = AGENT_INTERNAL_SECRET.
 
 function parseOwner(v: unknown): PublicKey | null {
   try {
@@ -21,7 +20,7 @@ export async function GET(req: NextRequest) {
   try {
     return NextResponse.json(await getDelegation(owner));
   } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 404 });
+    return NextResponse.json({ error: (e as Error).message || String(e) }, { status: 500 });
   }
 }
 

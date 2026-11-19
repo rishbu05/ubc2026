@@ -35,8 +35,8 @@ transaction request.
 ```
 app/api/paid/odds-history|news|analysis   x402-protected ($0.01 / $0.02 / $0.05 devnet USDC). Prices live in lib/x402.ts PAID_PRICES.
 app/api/agent/run          Agent loop stub (reads Gemini prediction markets).
-app/api/agent/topup        GET delegation status / POST delegate top-up (owner, amountUsdc, reason). UNAUTHENTICATED: TODO.
-app/api/approve            POST create approval -> { id, reference, url: solana:... }.
+app/api/agent/topup        GET delegation status / POST delegate top-up (owner, amountUsdc, reason). Requires x-agent-secret.
+app/api/approve            POST create approval -> { id, reference, url: solana:... }. Requires x-agent-secret.
 app/api/approve/[id]       Solana Pay transaction request: GET label/icon, POST { account } -> memo tx to sign.
 app/api/approve/[id]/check GET: find the signed approval onchain, verify it, mark approved in Supabase. Safe to poll.
 lib/agentPay.ts     agentFetch(): pays 402s from the Circle wallet, retries, returns { response, payment: { txSignature, explorerUrl } }.
@@ -44,6 +44,8 @@ lib/delegate.ts     getDelegation(), topUpFromDelegate(): transferChecked as SPL
 lib/approvals.ts    createApproval, buildApprovalTransaction, verifyApprovalOnchain (no DB), checkApproval (DB update).
 lib/circle.ts       Circle client; agentKitSigner() (x402) and agentWeb3Signer() (web3.js), both via Circle sign-transaction API.
 lib/solana.ts       Client-safe devnet helpers: connection, USDC mint, CAIP-2 id, memoInstruction, agentAddress, explorerTxUrl.
+proxy.ts            Next 16 proxy (ex-middleware): enforces x-agent-secret on protected routes. Fails closed if unset.
+lib/internalAuth.ts Which routes need AGENT_INTERNAL_SECRET (requiresInternalSecret), safeEqual, internalHeaders().
 lib/policy.ts       Pure policy logic: per-tx max, daily limit, approval threshold, host allowlist.
 lib/gemini.ts       Gemini EXCHANGE Prediction Markets client: listActiveEvents, getEvent, getOrderBook, placeOrder.
 lib/x402.ts         Shared x402ResourceServer (ExactSvmScheme on devnet), PAID_PRICES, paidRoute().
@@ -101,6 +103,12 @@ supabase/migrations/0001_approvals.sql  approvals table. Apply in the Supabase S
   Never build it from a title or ticker.
 
 ## Conventions
+
+- **Internal auth:** `/api/agent/*` (all methods) and `POST /api/approve` require header
+  `x-agent-secret: $AGENT_INTERNAL_SECRET`, enforced centrally in `proxy.ts`. New `/api/agent/*` routes are
+  covered automatically. These stay PUBLIC on purpose: `/api/approve/[id]` (Phantom calls it during Solana Pay),
+  `/api/approve/[id]/check` (it only marks done after verifying onchain) and `/api/paid/*` (gated by x402).
+  Server-side callers use `internalHeaders()`. Never call protected routes from client components.
 
 - Secrets are server-only. Only `NEXT_PUBLIC_*` vars may be read in client components.
   `SUPABASE_SERVICE_ROLE_KEY`, `CIRCLE_*`, `GEMINI_API_KEY`, and `GEMINI_API_SECRET` must never reach the browser.

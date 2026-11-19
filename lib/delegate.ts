@@ -7,6 +7,7 @@ import {
   createAssociatedTokenAccountIdempotentInstruction,
   createTransferCheckedInstruction,
   getAccount,
+  TokenAccountNotFoundError,
 } from "@solana/spl-token";
 import { agentWeb3Signer } from "./circle";
 import {
@@ -22,17 +23,32 @@ import {
 } from "./solana";
 
 export interface DelegationStatus {
+  hasUsdcAccount: boolean;
   delegate: string | null;
   delegatedUsdc: number;
   balanceUsdc: number;
   agentIsDelegate: boolean;
 }
 
+/** getAccount, but with a readable error when the owner has no USDC token account. */
+async function getUsdcAccount(owner: PublicKey) {
+  try {
+    return await getAccount(getConnection(), usdcAta(owner));
+  } catch (e) {
+    if (e instanceof TokenAccountNotFoundError) return null;
+    throw e;
+  }
+}
+
 /** Read the user's USDC account: who the delegate is and how much allowance remains. */
 export async function getDelegation(owner: PublicKey): Promise<DelegationStatus> {
-  const acct = await getAccount(getConnection(), usdcAta(owner));
+  const acct = await getUsdcAccount(owner);
   const agent = agentAddress();
+  if (!acct) {
+    return { hasUsdcAccount: false, delegate: null, delegatedUsdc: 0, balanceUsdc: 0, agentIsDelegate: false };
+  }
   return {
+    hasUsdcAccount: true,
     delegate: acct.delegate?.toBase58() ?? null,
     delegatedUsdc: baseUnitsToUsdc(acct.delegatedAmount),
     balanceUsdc: baseUnitsToUsdc(acct.amount),
@@ -61,7 +77,8 @@ export async function topUpFromDelegate(params: {
   const destination = usdcAta(agent);
 
   // Fail fast with a clear message instead of an opaque simulation error.
-  const acct = await getAccount(conn, source);
+  const acct = await getUsdcAccount(owner);
+  if (!acct) throw new Error(`${owner.toBase58()} has no devnet USDC token account`);
   if (!acct.delegate?.equals(agent)) {
     throw new Error(`Agent ${agent.toBase58()} is not the delegate on ${source.toBase58()}`);
   }
