@@ -41,3 +41,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local keypairs + Circle recovery file (scripts/setup-wallets.ts)
+.secrets/
