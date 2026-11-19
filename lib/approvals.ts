@@ -32,13 +32,17 @@ export function approvalMemo(a: Pick<Approval, "id" | "description">): string {
   return `approve #${a.id}: ${a.description}`.slice(0, MAX_MEMO);
 }
 
-function appUrl(): string {
-  return process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+/**
+ * Public base URL for Solana Pay links. Wallets (Phantom) must be able to reach it, so it should
+ * be the deployed URL even when running locally. Falls back to NEXT_PUBLIC_APP_URL.
+ */
+export function solanaPayBaseUrl(): string {
+  return process.env.SOLANA_PAY_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 }
 
 export function approvalLink(id: number): string {
   return encodeURL({
-    link: new URL(`/api/approve/${id}`, appUrl()),
+    link: new URL(`/api/approve/${id}`, solanaPayBaseUrl()),
     label: "Allowance",
     message: `Approve agent request #${id}`,
   }).toString();

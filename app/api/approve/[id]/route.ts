@@ -4,7 +4,7 @@
 //   POST { account } -> { transaction, message }: memo tx "approve #<id>: ..." for the wallet to sign.
 import { NextRequest, NextResponse } from "next/server";
 import { PublicKey } from "@solana/web3.js";
-import { buildApprovalTransaction, getApproval } from "@/lib/approvals";
+import { buildApprovalTransaction, getApproval, solanaPayBaseUrl } from "@/lib/approvals";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -19,8 +19,10 @@ export async function OPTIONS() {
 }
 
 export async function GET() {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-  return NextResponse.json({ label: "Allowance approval", icon: `${appUrl}/next.svg` }, { headers: CORS });
+  return NextResponse.json(
+    { label: "Allowance approval", icon: `${solanaPayBaseUrl()}/next.svg` },
+    { headers: CORS },
+  );
 }
 
 export async function POST(req: NextRequest, ctx: Ctx) {

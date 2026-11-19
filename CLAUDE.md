@@ -120,6 +120,18 @@ supabase/migrations/0001_approvals.sql  approvals table. Apply in the Supabase S
   The package isn't `"type": "module"`, so tsx compiles scripts as CJS: **no top-level await**; wrap in `main()`.
 - `withX402` handlers need an explicit `Promise<NextResponse<unknown>>` return type when they return more than one body shape.
 
+## Deployment (Vercel)
+
+- Project `ubc-2027/allowance`. Production URL: https://allowance-chi-nine.vercel.app
+- Deploy: `npx vercel deploy --prod --yes --scope ubc-2027`. The CLI uploads from **disk**, so `.vercelignore`
+  must keep excluding `.env*` and `.secrets/`.
+- Env vars live in Vercel (Production + Preview). Secrets are type Secret (`--sensitive`). Add them with
+  `printf '%s' "$v" | npx vercel env add NAME --environment production --environment preview [--sensitive|--no-sensitive]`.
+  CLI 66+: the 2nd positional argument is a **git branch**, so always use `--environment`.
+- `NEXT_PUBLIC_*` values are inlined at build time, so changing one requires a redeploy.
+- `SOLANA_PAY_BASE_URL` is the deployed URL everywhere (Phantom can't reach localhost), so Solana Pay
+  links work even from local dev.
+
 ## Commands
 
 ```
