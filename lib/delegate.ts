@@ -56,9 +56,37 @@ export async function getDelegation(owner: PublicKey): Promise<DelegationStatus>
   };
 }
 
+/** User-facing memo text recorded onchain with every top-up. */
+export function topUpMemo(reason: string): string {
+  return `Allowance top-up: ${reason.trim()}`.slice(0, 500);
+}
+
+/**
+ * The exact top-up transaction (unsigned): create the agent's USDC account if needed, then
+ * transferChecked from the owner's account with the AGENT as authority (i.e. as delegate), plus
+ * a Memo. No pre-checks here. Shared by topUpFromDelegate() and scripts/prove-revoked.ts.
+ */
+export async function buildTopUpTransaction(params: {
+  owner: PublicKey;
+  amount: bigint;
+  reason: string;
+}) {
+  const conn = getConnection();
+  const agent = agentAddress();
+  const source = usdcAta(params.owner);
+  const destination = usdcAta(agent);
+  const { blockhash, lastValidBlockHeight } = await conn.getLatestBlockhash("confirmed");
+  const tx = new Transaction({ feePayer: agent, blockhash, lastValidBlockHeight }).add(
+    createAssociatedTokenAccountIdempotentInstruction(agent, destination, agent, USDC_MINT),
+    createTransferCheckedInstruction(source, USDC_MINT, destination, agent, params.amount, USDC_DECIMALS),
+    memoInstruction(topUpMemo(params.reason), [agent]),
+  );
+  return { tx, blockhash, lastValidBlockHeight, source, destination, agent };
+}
+
 /**
  * Transfer `amountUsdc` from `owner`'s USDC account to the agent's USDC account, signed by the
- * agent as delegate, with a Memo instruction carrying `reason`.
+ * agent as delegate, with a Memo "Allowance top-up: <reason>".
  * The agent wallet pays the tx fee, so it needs a little devnet SOL.
  */
 export async function topUpFromDelegate(params: {
@@ -71,12 +99,12 @@ export async function topUpFromDelegate(params: {
   if (amount <= BigInt(0)) throw new Error("amountUsdc must be positive");
   if (!reason.trim()) throw new Error("reason is required");
 
-  const conn = getConnection();
   const agent = agentAddress();
   const source = usdcAta(owner);
-  const destination = usdcAta(agent);
 
   // Fail fast with a clear message instead of an opaque simulation error.
+  // (Not the security boundary: the token program enforces delegate authority onchain.
+  //  `npm run prove:revoked` demonstrates that by skipping this check.)
   const acct = await getUsdcAccount(owner);
   if (!acct) throw new Error(`${owner.toBase58()} has no devnet USDC token account`);
   if (!acct.delegate?.equals(agent)) {
@@ -88,13 +116,8 @@ export async function topUpFromDelegate(params: {
     );
   }
 
-  const { blockhash, lastValidBlockHeight } = await conn.getLatestBlockhash("confirmed");
-  const tx = new Transaction({ feePayer: agent, blockhash, lastValidBlockHeight }).add(
-    createAssociatedTokenAccountIdempotentInstruction(agent, destination, agent, USDC_MINT),
-    createTransferCheckedInstruction(source, USDC_MINT, destination, agent, amount, USDC_DECIMALS),
-    memoInstruction(`allowance top-up: ${reason}`.slice(0, 500), [agent]),
-  );
-
+  const conn = getConnection();
+  const { tx, blockhash, lastValidBlockHeight } = await buildTopUpTransaction({ owner, amount, reason });
   const signed = await agentWeb3Signer().signTransaction(tx);
   const signature = await conn.sendRawTransaction(signed.serialize(), { preflightCommitment: "confirmed" });
   const result = await conn.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, "confirmed");
@@ -109,5 +132,6 @@ export async function topUpFromDelegate(params: {
     from: owner.toBase58(),
     to: agent.toBase58(),
     reason,
+    memo: topUpMemo(reason),
   };
 }

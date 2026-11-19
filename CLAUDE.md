@@ -52,6 +52,7 @@ lib/x402.ts         Shared x402ResourceServer (ExactSvmScheme on devnet), PAID_P
 lib/supabase.ts     Browser (anon) and admin (service role) Supabase clients.
 components/WalletProviders.tsx  Wallet adapter providers (Phantom, Solflare) on devnet, wrapped in app/layout.tsx.
 components/DelegatePanel.tsx    User approve()/revoke() of an N-USDC SPL delegate allowance for the agent (on app/page.tsx).
+scripts/prove-revoked.ts  Demo: skips the server pre-check, Circle-signs the real top-up tx, simulates it (never sends), prints the token program's error. `npm run prove:revoked -- <owner> [amount]`
 scripts/pay-once.ts One end-to-end paid call; prints the Explorer link. `npm run pay:once -- [path]` (needs `npm run dev`).
 supabase/migrations/0001_approvals.sql  approvals table. Apply in the Supabase SQL editor or with `supabase db push`.
 ```
@@ -77,7 +78,10 @@ supabase/migrations/0001_approvals.sql  approvals table. Apply in the Supabase S
 - **Circle signing:** `@circle-fin/developer-controlled-wallets/solana/kit` and `/solana/web3` give
   signers backed by `POST /v1/w3s/developer/sign/transaction`. Don't hand-roll that call.
 - **Delegate top-up:** the user's Phantom wallet runs `approveChecked(userAta, mint, agent, N)`. The
-  agent then sends `transferChecked(userAta -> agentAta)` as delegate plus a Memo carrying the reason.
+  agent then sends `transferChecked(userAta -> agentAta)` as delegate plus a Memo `Allowance top-up: <reason>`
+  (`topUpMemo()`). Memos are permanent and public, so keep reasons user-friendly (no internal test labels).
+  Both the route and `prove:revoked` build the tx with `buildTopUpTransaction()`. The server pre-check is UX only;
+  the token program enforces the delegate onchain (revoked gives OwnerMismatch 0x4).
   The agent wallet pays this fee, so it **needs devnet SOL**.
 - **Approval tx:** Memo v2 rejects non-signer accounts, so the Solana Pay `reference` key is attached
   to a 0-lamport self-transfer, and the memo instruction lists only the user as signer.
