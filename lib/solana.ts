@@ -1,5 +1,6 @@
 // Solana devnet helpers. Everything in this app targets DEVNET.
-import { Connection, PublicKey, clusterApiUrl } from "@solana/web3.js";
+// Client-safe: no secrets here (only NEXT_PUBLIC_* env).
+import { Connection, PublicKey, TransactionInstruction, clusterApiUrl } from "@solana/web3.js";
 import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 import BigNumber from "bignumber.js";
 
@@ -48,4 +49,26 @@ export async function getUsdcBalance(owner: PublicKey): Promise<number> {
   } catch {
     return 0; // no ATA yet
   }
+}
+
+/** SPL Memo program v2. Every account passed to it must be a signer. */
+export const MEMO_PROGRAM_ID = new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
+
+export function memoInstruction(text: string, signers: PublicKey[]): TransactionInstruction {
+  return new TransactionInstruction({
+    programId: MEMO_PROGRAM_ID,
+    keys: signers.map((pubkey) => ({ pubkey, isSigner: true, isWritable: false })),
+    data: Buffer.from(text, "utf8"),
+  });
+}
+
+/** The agent's Circle wallet address (public; safe to expose to the browser). */
+export function agentAddress(): PublicKey {
+  const a = process.env.NEXT_PUBLIC_AGENT_WALLET_ADDRESS;
+  if (!a) throw new Error("Missing env var NEXT_PUBLIC_AGENT_WALLET_ADDRESS");
+  return new PublicKey(a);
+}
+
+export function explorerTxUrl(signature: string): string {
+  return `https://explorer.solana.com/tx/${signature}?cluster=devnet`;
 }

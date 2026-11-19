@@ -1,13 +1,10 @@
-// Solana Pay transaction-request endpoint for human approval of an over-threshold spend.
-// Wallets call GET for label/icon, then POST { account } to receive a transaction to sign.
-// Link format: solana:<APP_URL>/api/approve/<id>
+// Solana Pay transaction-request endpoint for approval #id.
+// Link: solana:<APP_URL>/api/approve/<id>
+//   GET  -> { label, icon }
+//   POST { account } -> { transaction, message }: memo tx "approve #<id>: ..." for the wallet to sign.
 import { NextRequest, NextResponse } from "next/server";
-import { PublicKey, Transaction } from "@solana/web3.js";
-import {
-  createTransferCheckedInstruction,
-  getAssociatedTokenAddressSync,
-} from "@solana/spl-token";
-import { getConnection, usdcAta, usdcToBaseUnits, USDC_MINT, USDC_DECIMALS } from "@/lib/solana";
+import { PublicKey } from "@solana/web3.js";
+import { buildApprovalTransaction, getApproval } from "@/lib/approvals";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -15,46 +12,36 @@ const CORS = {
   "Access-Control-Allow-Headers": "Content-Type",
 };
 
+type Ctx = { params: Promise<{ id: string }> };
+
 export async function OPTIONS() {
   return new NextResponse(null, { headers: CORS });
 }
 
 export async function GET() {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-  return NextResponse.json(
-    { label: "Allowance approval", icon: `${appUrl}/next.svg` },
-    { headers: CORS },
-  );
+  return NextResponse.json({ label: "Allowance approval", icon: `${appUrl}/next.svg` }, { headers: CORS });
 }
 
-export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const { id } = await ctx.params;
-  const { account } = (await req.json()) as { account: string };
-  const payer = new PublicKey(account);
+export async function POST(req: NextRequest, ctx: Ctx) {
+  const id = Number((await ctx.params).id);
+  const { account } = (await req.json().catch(() => ({}))) as { account?: string };
 
-  // TODO: load the pending approval `id` from Supabase (amount + recipient).
-  const pending = {
-    amountUsdc: "0.10",
-    recipient: process.env.CIRCLE_AGENT_WALLET_ADDRESS ?? account,
-  };
-  const recipient = new PublicKey(pending.recipient);
+  let payer: PublicKey;
+  try {
+    payer = new PublicKey(account ?? "");
+  } catch {
+    return NextResponse.json({ error: "valid account required" }, { status: 400, headers: CORS });
+  }
+  if (!Number.isInteger(id)) {
+    return NextResponse.json({ error: "invalid approval id" }, { status: 400, headers: CORS });
+  }
 
-  const conn = getConnection();
-  const { blockhash, lastValidBlockHeight } = await conn.getLatestBlockhash();
-  const tx = new Transaction({ feePayer: payer, blockhash, lastValidBlockHeight }).add(
-    createTransferCheckedInstruction(
-      usdcAta(payer),
-      USDC_MINT,
-      getAssociatedTokenAddressSync(USDC_MINT, recipient, true),
-      payer,
-      usdcToBaseUnits(pending.amountUsdc),
-      USDC_DECIMALS,
-    ),
-  );
-
-  const transaction = tx.serialize({ requireAllSignatures: false }).toString("base64");
-  return NextResponse.json(
-    { transaction, message: `Approve agent spend #${id}: ${pending.amountUsdc} USDC` },
-    { headers: CORS },
-  );
+  try {
+    const approval = await getApproval(id);
+    if (!approval) return NextResponse.json({ error: "not found" }, { status: 404, headers: CORS });
+    return NextResponse.json(await buildApprovalTransaction(approval, payer), { headers: CORS });
+  } catch (e) {
+    return NextResponse.json({ error: (e as Error).message }, { status: 400, headers: CORS });
+  }
 }

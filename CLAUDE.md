@@ -33,16 +33,25 @@ transaction request.
 ## Layout
 
 ```
-app/api/paid/*      x402-protected data endpoints. They return 402 until a valid USDC payment is attached.
-app/api/agent/*     Agent loop: reads Gemini prediction markets, calls paid endpoints, and each spend goes through the policy.
-app/api/approve/*   Solana Pay transaction-request endpoints (GET = label/icon, POST = return a tx to sign).
+app/api/paid/odds-history|news|analysis   x402-protected ($0.01 / $0.02 / $0.05 devnet USDC). Prices live in lib/x402.ts PAID_PRICES.
+app/api/agent/run          Agent loop stub (reads Gemini prediction markets).
+app/api/agent/topup        GET delegation status / POST delegate top-up (owner, amountUsdc, reason). UNAUTHENTICATED: TODO.
+app/api/approve            POST create approval -> { id, reference, url: solana:... }.
+app/api/approve/[id]       Solana Pay transaction request: GET label/icon, POST { account } -> memo tx to sign.
+app/api/approve/[id]/check GET: find the signed approval onchain, verify it, mark approved in Supabase. Safe to poll.
+lib/agentPay.ts     agentFetch(): pays 402s from the Circle wallet, retries, returns { response, payment: { txSignature, explorerUrl } }.
+lib/delegate.ts     getDelegation(), topUpFromDelegate(): transferChecked as SPL delegate + Memo(reason), signed via Circle.
+lib/approvals.ts    createApproval, buildApprovalTransaction, verifyApprovalOnchain (no DB), checkApproval (DB update).
+lib/circle.ts       Circle client; agentKitSigner() (x402) and agentWeb3Signer() (web3.js), both via Circle sign-transaction API.
+lib/solana.ts       Client-safe devnet helpers: connection, USDC mint, CAIP-2 id, memoInstruction, agentAddress, explorerTxUrl.
 lib/policy.ts       Pure policy logic: per-tx max, daily limit, approval threshold, host allowlist.
-lib/circle.ts       Circle client plus helpers for the agent wallet (balance, transfer).
-lib/solana.ts       Devnet connection, USDC mint, CAIP-2 network id, and tx builders.
 lib/gemini.ts       Gemini EXCHANGE Prediction Markets client: listActiveEvents, getEvent, getOrderBook, placeOrder.
-lib/x402.ts         Shared x402ResourceServer (ExactSvmScheme on devnet) and a paidRoute() config helper.
+lib/x402.ts         Shared x402ResourceServer (ExactSvmScheme on devnet), PAID_PRICES, paidRoute().
 lib/supabase.ts     Browser (anon) and admin (service role) Supabase clients.
 components/WalletProviders.tsx  Wallet adapter providers (Phantom, Solflare) on devnet, wrapped in app/layout.tsx.
+components/DelegatePanel.tsx    User approve()/revoke() of an N-USDC SPL delegate allowance for the agent (on app/page.tsx).
+scripts/pay-once.ts One end-to-end paid call; prints the Explorer link. `npm run pay:once -- [path]` (needs `npm run dev`).
+supabase/migrations/0001_approvals.sql  approvals table. Apply in the Supabase SQL editor or with `supabase db push`.
 ```
 
 ## Spend flow
@@ -55,6 +64,23 @@ components/WalletProviders.tsx  Wallet adapter providers (Phantom, Solflare) on 
    - `require_approval`: create a pending approval row and hand the human a
      `solana:<APP_URL>/api/approve/...` link or QR code. The human signs in their wallet,
      and the agent resumes once the payment is confirmed.
+
+## Payments, delegation, approvals: how they work
+
+- **x402 (agent pays):** the facilitator (`https://x402.org/facilitator`) is the **fee payer**
+  (`CKPKJWNdJEqa81x7CkZ14BVPiY6y16Sxs7owznqtWYp5`). The agent only partially signs the USDC
+  transferChecked, so it needs USDC but **no SOL**. The **seller wallet (`X402_PAY_TO_ADDRESS`) must
+  already have a USDC token account**; otherwise settlement fails with
+  `invalid_exact_svm_recipient_ata_missing`.
+- **Circle signing:** `@circle-fin/developer-controlled-wallets/solana/kit` and `/solana/web3` give
+  signers backed by `POST /v1/w3s/developer/sign/transaction`. Don't hand-roll that call.
+- **Delegate top-up:** the user's Phantom wallet runs `approveChecked(userAta, mint, agent, N)`. The
+  agent then sends `transferChecked(userAta -> agentAta)` as delegate plus a Memo carrying the reason.
+  The agent wallet pays this fee, so it **needs devnet SOL**.
+- **Approval tx:** Memo v2 rejects non-signer accounts, so the Solana Pay `reference` key is attached
+  to a 0-lamport self-transfer, and the memo instruction lists only the user as signer.
+  The memo text is `approvalMemo()`: `approve #<id>: <description>`, truncated to 200 chars.
+- Devnet RPC airdrops are closed. Get SOL from https://faucet.solana.com and USDC from https://faucet.circle.com.
 
 ## Gemini Prediction Markets (lib/gemini.ts)
 
@@ -82,6 +108,9 @@ components/WalletProviders.tsx  Wallet adapter providers (Phantom, Solflare) on 
   the chain boundary in `lib/solana.ts`.
 - Keep `lib/policy.ts` pure (no I/O) so it is easy to test.
 - See `.env.example` for every required variable. `.env` is gitignored, and `.env.example` is committed.
+- Scripts run with `tsx --conditions=react-server`, which turns `import "server-only"` into a no-op.
+  The package isn't `"type": "module"`, so tsx compiles scripts as CJS: **no top-level await**; wrap in `main()`.
+- `withX402` handlers need an explicit `Promise<NextResponse<unknown>>` return type when they return more than one body shape.
 
 ## Commands
 
@@ -89,4 +118,5 @@ components/WalletProviders.tsx  Wallet adapter providers (Phantom, Solflare) on 
 npm run dev     # local dev on :3000
 npm run build
 npm run lint
+npm run pay:once -- /api/paid/news?event=<ticker>   # one real x402 payment from the Circle wallet
 ```
