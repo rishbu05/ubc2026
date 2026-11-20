@@ -2,13 +2,20 @@
 // NOT Google Gemini AI. Do not add @google/genai or any LLM SDK here.
 //
 // Docs: https://developer.gemini.com/prediction-markets-spec
-// Base URL defaults to the SANDBOX (https://api.sandbox.gemini.com). Prod is https://api.gemini.com.
-// Public endpoints (events, order book) need no key. Private endpoints (orders) are HMAC-signed.
+// Two hosts, on purpose:
+//   - MARKET DATA (public, no key): GEMINI_MARKET_DATA_URL, default PRODUCTION https://api.gemini.com
+//   - ORDERS (signed): GEMINI_API_BASE_URL, default SANDBOX https://api.sandbox.gemini.com
+// Never place orders on production from this app.
 import "server-only";
 import crypto from "node:crypto";
 
+/** Signed trading endpoints (orders, positions). SANDBOX by default. */
 export const GEMINI_BASE_URL =
   process.env.GEMINI_API_BASE_URL ?? "https://api.sandbox.gemini.com";
+
+/** Public market data (events, books, candles, tickers). PRODUCTION by default. */
+export const GEMINI_MARKET_DATA_URL =
+  process.env.GEMINI_MARKET_DATA_URL ?? "https://api.gemini.com";
 
 // ── Types (subset of fields; responses contain more) ────────────────────
 
@@ -90,8 +97,14 @@ export class GeminiApiError extends Error {
   }
 }
 
+/**
+ * Gemini order ids exceed Number.MAX_SAFE_INTEGER (e.g. 145853902325052770), so JSON.parse would
+ * silently round them. Quote any long integer id fields before parsing so they stay exact strings.
+ */
+const BIG_ID_FIELDS = /("(?:orderId|globalOrderId|tid|order_id|id)"\s*:\s*)(\d{16,})/g;
+
 async function parse<T>(res: Response): Promise<T> {
-  const text = await res.text();
+  const text = (await res.text()).replace(BIG_ID_FIELDS, '$1"$2"');
   let body: unknown = text;
   try {
     body = JSON.parse(text);
@@ -102,9 +115,20 @@ async function parse<T>(res: Response): Promise<T> {
   return body as T;
 }
 
-async function publicGet<T>(path: string): Promise<T> {
-  const res = await fetch(`${GEMINI_BASE_URL}${path}`, { cache: "no-store" });
+async function publicGet<T>(path: string, opts: { base?: string; revalidate?: number } = {}): Promise<T> {
+  const base = opts.base ?? GEMINI_MARKET_DATA_URL;
+  const res = await fetch(
+    `${base}${path}`,
+    opts.revalidate ? { next: { revalidate: opts.revalidate } } : { cache: "no-store" },
+  );
   return parse<T>(res);
+}
+
+/** Marks a numeric id that must be sent as an exact integer (too big for a JS number). */
+class BigIntId {
+  constructor(readonly digits: string) {
+    if (!/^\d+$/.test(digits)) throw new Error(`Invalid order id: ${digits}`);
+  }
 }
 
 // Nonce must strictly increase per API key. Millisecond timestamps, bumped if two calls share a ms.
@@ -125,9 +149,11 @@ async function privatePost<T>(path: string, fields: Record<string, unknown>): Pr
   if (!apiKey || !apiSecret) {
     throw new Error("Missing GEMINI_API_KEY / GEMINI_API_SECRET (Gemini exchange sandbox key)");
   }
-  const payload = Buffer.from(
-    JSON.stringify({ request: path, nonce: nextNonce(), ...fields }),
-  ).toString("base64");
+  // Fields wrapped in BigIntId are emitted as exact unquoted integers (order ids > 2^53).
+  const json = JSON.stringify({ request: path, nonce: nextNonce(), ...fields }, (_k, v) =>
+    v instanceof BigIntId ? `__BIGINT__${v.digits}__` : v,
+  ).replace(/"__BIGINT__(\d+)__"/g, "$1");
+  const payload = Buffer.from(json).toString("base64");
   const signature = crypto.createHmac("sha384", apiSecret).update(payload).digest("hex");
 
   const res = await fetch(`${GEMINI_BASE_URL}${path}`, {
@@ -156,10 +182,11 @@ export function listActiveEvents(opts: { limit?: number; offset?: number } = {})
 }
 
 /** GET /v1/prediction-markets/events/{eventTicker} */
-export function getEvent(eventTicker: string) {
-  return publicGet<PredictionEvent>(
-    `/v1/prediction-markets/events/${encodeURIComponent(eventTicker)}`,
-  );
+export function getEvent(eventTicker: string, opts: { venue?: "market-data" | "sandbox"; revalidate?: number } = {}) {
+  return publicGet<PredictionEvent>(`/v1/prediction-markets/events/${encodeURIComponent(eventTicker)}`, {
+    base: opts.venue === "sandbox" ? GEMINI_BASE_URL : GEMINI_MARKET_DATA_URL,
+    revalidate: opts.revalidate,
+  });
 }
 
 /**
@@ -209,4 +236,32 @@ export function listActiveOrders(symbol?: string) {
 /** POST /v1/prediction-markets/positions (signed, read-only). */
 export function listPositions() {
   return privatePost<unknown>("/v1/prediction-markets/positions", {});
+}
+
+// ── Price history (production market data) ─────────────────────────────
+
+export type CandleTimeframe = "1m" | "5m" | "15m" | "30m" | "1hr" | "6hr" | "1day";
+
+/** One candle: [timeMs, open, high, low, close, volume]. Close = last trade price. */
+export type Candle = [number, number, number, number, number, number];
+
+/** GET /v2/candles/{symbol}/{timeframe}, newest first. Works for prediction contract symbols. */
+export function getCandles(symbol: string, timeframe: CandleTimeframe = "15m", revalidate = 60) {
+  return publicGet<Candle[]>(`/v2/candles/${encodeURIComponent(symbol)}/${timeframe}`, { revalidate });
+}
+
+export interface Ticker {
+  bid: string | null;
+  ask: string | null;
+  last: string | null;
+}
+
+/** GET /v1/pubticker/{symbol}: live best bid/ask + last trade. */
+export function getTicker(symbol: string, revalidate = 15) {
+  return publicGet<Ticker>(`/v1/pubticker/${encodeURIComponent(symbol)}`, { revalidate });
+}
+
+/** POST /v1/prediction-markets/order/cancel (signed, sandbox). */
+export function cancelOrder(orderId: string) {
+  return privatePost<Record<string, unknown>>("/v1/prediction-markets/order/cancel", { orderId: new BigIntId(String(orderId)) });
 }

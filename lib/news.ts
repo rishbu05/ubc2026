@@ -2,14 +2,14 @@
 // Parsed server-side, cached 5 minutes. Server-only.
 import "server-only";
 import { Keypair } from "@solana/web3.js";
+import { DEFAULT_EVENT_TICKER, MARKETS } from "./markets";
 
-export const DEFAULT_EVENT_TICKER = "FED261211";
+export { DEFAULT_EVENT_TICKER };
 
 /** Market event ticker -> news search topic. */
-export const EVENT_TOPICS: Record<string, string> = {
-  FED261211: "Federal Reserve interest rate decision",
-  SPXEND26: "S&P 500",
-};
+export const EVENT_TOPICS: Record<string, string> = Object.fromEntries(
+  Object.values(MARKETS).map((m) => [m.eventTicker, m.newsTopic]),
+);
 
 export const NEWS_CACHE_SECONDS = 300;
 const MAX_TOPIC_LENGTH = 200;

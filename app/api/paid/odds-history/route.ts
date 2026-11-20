@@ -1,10 +1,10 @@
-// x402-protected ($0.01 devnet USDC): recorded odds history from Supabase `odds_snapshots`.
+// x402-protected ($0.01 devnet USDC): odds history (candles + recorder snapshots + live mid).
 //
 // GET /api/paid/odds-history
 //   ?symbol=GEMI-FED261211-HIKE25      one contract, or
-//   ?event_ticker=FED261211            all contracts in an event (default: FED261211)
+//   ?event_ticker=BTC2611302200        all contracts in an event (default: BTC2611302200)
 //   &since=2026-11-19T23:45:00Z        optional, rows with ts >= since
-//   &limit=500                         optional, 1-5000 (default 500)
+//   &limit=100                         optional, points PER CONTRACT, 1-5000 (default 100)
 // Ordered by ts ascending. Without `since`, returns the most recent `limit` rows.
 //
 // Params are validated BEFORE the x402 paywall, so a bad request is rejected without charging.
@@ -25,7 +25,7 @@ const paidHandler = withX402(
         eventTicker: query.eventTicker ?? null,
         since: query.since ?? null,
         limit: query.limit,
-        source: "Gemini production market data, recorded every minute",
+        source: "Gemini production market data: candles (last trade) + recorder snapshots + live order-book mid",
         ...history,
       });
     } catch (e) {

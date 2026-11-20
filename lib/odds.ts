@@ -1,11 +1,16 @@
-// Reads odds history recorded by the partner's recorder into Supabase `odds_snapshots`
-// (one row per contract per minute: ts, event_ticker, symbol, label, bid, ask, last, mid, raw).
-// Source prices come from Gemini PRODUCTION public market data. Server-only.
+// Odds history for a market, merged from three sources (all Gemini PRODUCTION market data):
+//   1. "candle"   - /v2/candles close prices (last trade), backfills history immediately
+//   2. "snapshot" - partner's recorder rows in Supabase odds_snapshots (bid/ask/last/mid per minute)
+//   3. "live"     - /v1/pubticker best bid/ask right now (mid = (bid+ask)/2)
+// Server-only.
 import "server-only";
 import { supabaseAdmin } from "./supabase";
+import { getCandles, getEvent, getTicker } from "./gemini";
+import { DEFAULT_EVENT_TICKER } from "./markets";
 
-export const DEFAULT_EVENT_TICKER = "FED261211";
-export const DEFAULT_LIMIT = 500;
+export { DEFAULT_EVENT_TICKER };
+/** Points per contract (series). */
+export const DEFAULT_LIMIT = 100;
 export const MAX_LIMIT = 5000;
 
 export interface OddsQuery {
@@ -16,12 +21,15 @@ export interface OddsQuery {
   limit?: number;
 }
 
+export type OddsSource = "candle" | "snapshot" | "live";
+
 export interface OddsPoint {
   ts: string;
   bid: number | null;
   ask: number | null;
   last: number | null;
   mid: number | null;
+  src: OddsSource;
 }
 
 export interface OddsSeries {
@@ -64,12 +72,14 @@ export function parseOddsQuery(params: URLSearchParams): { error: string } | { q
   };
 }
 
-/**
- * Rows ordered by ts ascending.
- * - with `since`: the first `limit` rows at or after `since`
- * - without `since`: the most recent `limit` rows (still returned oldest -> newest)
- */
-export async function getOddsHistory(q: OddsQuery & { limit: number }) {
+function num(v: unknown): number | null {
+  if (v === null || v === undefined || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Recorder rows from Supabase (empty until the recorder logs this market). */
+async function snapshotRows(q: OddsQuery & { limit: number }) {
   let query = supabaseAdmin()
     .from("odds_snapshots")
     .select("ts,event_ticker,symbol,label,bid,ask,last,mid")
@@ -78,26 +88,92 @@ export async function getOddsHistory(q: OddsQuery & { limit: number }) {
   else if (q.eventTicker) query = query.eq("event_ticker", q.eventTicker);
   if (q.since) query = query.gte("ts", q.since).order("ts", { ascending: true });
   else query = query.order("ts", { ascending: false });
-
   const { data, error } = await query;
   if (error) throw new Error(`odds_snapshots query failed: ${error.message}`);
-  const rows = q.since ? data : [...data].reverse();
+  return q.since ? data : [...data].reverse();
+}
+
+/** Contracts to chart: one symbol, or every contract in the event (labels from Gemini). */
+async function contractsFor(q: OddsQuery): Promise<{ symbol: string; label: string; eventTicker: string }[]> {
+  const ticker = q.eventTicker ?? q.symbol?.split("-")[1] ?? DEFAULT_EVENT_TICKER;
+  try {
+    const ev = await getEvent(ticker, { revalidate: 300 });
+    const all = ev.contracts.map((c) => ({ symbol: c.instrumentSymbol, label: c.label, eventTicker: ev.ticker }));
+    return q.symbol ? all.filter((c) => c.symbol === q.symbol) : all;
+  } catch {
+    return q.symbol ? [{ symbol: q.symbol, label: q.symbol, eventTicker: ticker }] : [];
+  }
+}
+
+/**
+ * Merged history per contract, ts ascending. Each series keeps at most `limit` points
+ * (the most recent ones). `since` filters every source.
+ */
+export async function getOddsHistory(q: OddsQuery & { limit: number }) {
+  const sinceMs = q.since ? new Date(q.since).getTime() : 0;
+  const [rows, contracts] = await Promise.all([snapshotRows(q), contractsFor(q)]);
 
   const bySymbol = new Map<string, OddsSeries>();
+  const series = (symbol: string, label: string, eventTicker: string) => {
+    let s = bySymbol.get(symbol);
+    if (!s) bySymbol.set(symbol, (s = { symbol, label, eventTicker, points: [] }));
+    return s;
+  };
+
+  await Promise.all(
+    contracts.map(async (c) => {
+      const s = series(c.symbol, c.label, c.eventTicker);
+      const [candles, ticker] = await Promise.all([
+        getCandles(c.symbol, "15m").catch(() => []),
+        getTicker(c.symbol).catch(() => null),
+      ]);
+      for (const [t, , , , close] of candles) {
+        if (t < sinceMs) continue;
+        s.points.push({ ts: new Date(t).toISOString(), bid: null, ask: null, last: px(close), mid: null, src: "candle" });
+      }
+      if (ticker) {
+        const bid = num(ticker.bid), ask = num(ticker.ask);
+        s.points.push({
+          ts: new Date().toISOString(),
+          bid: px(bid),
+          ask: px(ask),
+          last: px(num(ticker.last)),
+          mid: bid !== null && ask !== null ? px((bid + ask) / 2) : null,
+          src: "live",
+        });
+      }
+    }),
+  );
+
   for (const r of rows) {
-    let s = bySymbol.get(r.symbol);
-    if (!s) {
-      s = { symbol: r.symbol, label: r.label, eventTicker: r.event_ticker, points: [] };
-      bySymbol.set(r.symbol, s);
-    }
-    s.points.push({ ts: r.ts, bid: px(r.bid), ask: px(r.ask), last: px(r.last), mid: px(r.mid) });
+    series(r.symbol, r.label, r.event_ticker).points.push({
+      ts: new Date(r.ts).toISOString(),
+      bid: px(r.bid),
+      ask: px(r.ask),
+      last: px(r.last),
+      mid: px(r.mid),
+      src: "snapshot",
+    });
   }
 
+  let truncated = false;
+  for (const s of bySymbol.values()) {
+    s.points.sort((a, b) => a.ts.localeCompare(b.ts));
+    if (s.points.length > q.limit) {
+      s.points = s.points.slice(-q.limit);
+      truncated = true;
+    }
+  }
+  const all = [...bySymbol.values()].flatMap((s) => s.points);
+  const counts: Record<OddsSource, number> = { candle: 0, snapshot: 0, live: 0 };
+  for (const p of all) counts[p.src]++;
+  const tsSorted = all.map((p) => p.ts).sort();
   return {
-    rows: rows.length,
-    from: rows[0]?.ts ?? null,
-    to: rows[rows.length - 1]?.ts ?? null,
-    truncated: rows.length === q.limit,
+    rows: all.length,
+    from: tsSorted[0] ?? null,
+    to: tsSorted[tsSorted.length - 1] ?? null,
+    truncated,
+    sources: counts,
     series: [...bySymbol.values()],
   };
 }
