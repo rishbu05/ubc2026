@@ -113,28 +113,28 @@ export default function DelegatePanel() {
 
   if (!agent) {
     return (
-      <p className="text-sm text-red-600">Set NEXT_PUBLIC_AGENT_WALLET_ADDRESS to enable the allowance panel.</p>
+      <p className="text-sm text-[var(--acc-block)]">Set NEXT_PUBLIC_AGENT_WALLET_ADDRESS to enable the allowance panel.</p>
     );
   }
   const agentIsDelegate = status?.delegate === agent.toBase58();
 
   return (
-    <section className="w-full max-w-md rounded-xl border border-black/10 dark:border-white/15 p-5 space-y-4">
+    <section className="w-full max-w-md space-y-4 rounded-2xl border border-[var(--navy-line)] bg-[var(--navy-1)]/95 p-5 text-slate-100 shadow-2xl shadow-black/30">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-lg font-semibold">Agent allowance</h2>
         <WalletMultiButton />
       </div>
 
-      <p className="text-sm opacity-70 break-all">Agent: {agent.toBase58()}</p>
+      <p className="break-all font-mono text-xs text-slate-400">Agent: {agent.toBase58()}</p>
 
       {publicKey && status && (
-        <dl className="grid grid-cols-2 gap-y-1 text-sm">
-          <dt className="opacity-70">Your USDC</dt>
+        <dl className="grid grid-cols-2 gap-y-1 rounded-lg bg-[var(--navy-2)] p-3 text-sm">
+          <dt className="text-slate-400">Your USDC</dt>
           <dd className="text-right tabular-nums">{status.balance}</dd>
-          <dt className="opacity-70">Agent allowance</dt>
-          <dd className="text-right tabular-nums">{agentIsDelegate ? status.delegated : 0}</dd>
+          <dt className="text-slate-400">Agent allowance</dt>
+          <dd className="text-right font-mono tabular-nums text-[var(--acc-pay)]">{agentIsDelegate ? status.delegated : 0}</dd>
           {status.delegate && !agentIsDelegate && (
-            <dd className="col-span-2 text-amber-600">
+            <dd className="col-span-2 text-amber-400">
               Another delegate is set; approving replaces it.
             </dd>
           )}
@@ -149,30 +149,30 @@ export default function DelegatePanel() {
             step="0.01"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            className="w-28 rounded-md border border-black/15 dark:border-white/20 bg-transparent px-2 py-1.5 tabular-nums"
+            className="w-28 rounded-md border border-[#2a3b5e] bg-[var(--navy-2)] px-2 py-1.5 font-mono tabular-nums focus:border-[var(--acc-pay)] focus:outline-none"
             aria-label="USDC amount"
           />
           <button
             onClick={approve}
             disabled={busy}
-            className="flex-1 rounded-md bg-black text-white dark:bg-white dark:text-black px-3 py-1.5 font-medium disabled:opacity-50"
+            className="flex-1 rounded-md bg-[var(--acc-pay)] px-3 py-1.5 font-medium text-[var(--navy-1)] transition hover:brightness-110 active:scale-[0.98] disabled:opacity-50"
           >
             Approve
           </button>
           <button
             onClick={revoke}
             disabled={busy || !status?.delegate}
-            className="rounded-md border border-black/15 dark:border-white/20 px-3 py-1.5 disabled:opacity-50"
+            className="rounded-md border border-[var(--acc-block)]/50 px-3 py-1.5 text-[var(--acc-block)] transition hover:bg-[var(--acc-block)]/10 disabled:opacity-50"
           >
             Revoke
           </button>
         </div>
       ) : (
-        <p className="text-sm opacity-70">Connect Phantom (devnet) to set an allowance.</p>
+        <p className="text-sm text-slate-400">Connect Phantom (devnet) to set an allowance.</p>
       )}
 
       {message && (
-        <p className={`text-sm break-all ${message.error ? "text-red-600" : ""}`}>
+        <p className={`anim-step-in text-sm break-all ${message.error ? "text-[var(--acc-block)]" : "text-[var(--acc-ok)]"}`}>
           {message.text}{" "}
           {message.href && (
             <a href={message.href} target="_blank" rel="noreferrer" className="underline">

@@ -132,12 +132,12 @@ export default function ApprovalModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+      className="anim-fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
       aria-labelledby="approval-title"
     >
-      <div className="w-full max-w-md rounded-2xl border border-[#1e2d4a] bg-[#0b1426] text-slate-100 shadow-2xl">
+      <div className="anim-modal-in w-full max-w-md rounded-2xl border border-[var(--acc-pay)]/30 bg-[#0b1426] text-slate-100 shadow-2xl shadow-orange-500/10">
         <div className="flex items-center justify-between border-b border-[#1e2d4a] px-5 py-4">
           <h2 id="approval-title" className="text-base font-semibold">
             Approve agent request
@@ -150,7 +150,7 @@ export default function ApprovalModal({
         <div className="space-y-4 px-5 py-4">
           <div>
             <p className="text-xs uppercase tracking-wide text-slate-400">Amount</p>
-            <p className="font-mono text-3xl font-semibold text-orange-400 tabular-nums">{amountLabel}</p>
+            <p className="font-mono text-3xl font-semibold text-[var(--acc-pay)] tabular-nums">{amountLabel}</p>
           </div>
           <div>
             <p className="text-xs uppercase tracking-wide text-slate-400">The agent wants to</p>
@@ -169,8 +169,8 @@ export default function ApprovalModal({
           </dl>
 
           {phase.kind === "approved" ? (
-            <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm">
-              <p className="font-medium text-emerald-300">Approved onchain ✓</p>
+            <div className="anim-pop-in rounded-lg border border-[var(--acc-ok)]/40 bg-[var(--acc-ok)]/10 p-3 text-sm">
+              <p className="font-medium text-[var(--acc-ok)]">Approved onchain ✓</p>
               <p className="mt-1 font-mono text-xs text-slate-300">
                 by {short(phase.result.approver)} ·{" "}
                 <a href={phase.result.explorerUrl} target="_blank" rel="noreferrer" className="text-orange-400 underline">
@@ -181,7 +181,7 @@ export default function ApprovalModal({
           ) : (
             <>
               <div className="flex flex-col items-center gap-2">
-                <div ref={qrRef} className="overflow-hidden rounded-xl bg-white p-2" style={{ width: 248, height: 248 }} />
+                <div ref={qrRef} className="anim-qr-pulse overflow-hidden rounded-xl bg-white p-2 ring-2 ring-[var(--acc-pay)]/70" style={{ width: 248, height: 248 }} />
                 <p className="text-xs text-slate-400">Scan with Phantom mobile (Devnet)</p>
               </div>
 
@@ -193,7 +193,7 @@ export default function ApprovalModal({
                 <button
                   onClick={signInBrowser}
                   disabled={phase.kind === "signing" || phase.kind === "submitted"}
-                  className="w-full rounded-lg bg-orange-500 px-4 py-2.5 font-medium text-[#0b1426] hover:bg-orange-400 disabled:opacity-50"
+                  className="w-full rounded-lg bg-[var(--acc-pay)] px-4 py-2.5 font-medium text-[#0b1426] transition hover:brightness-110 active:scale-[0.98] disabled:opacity-50"
                 >
                   {phase.kind === "signing" ? "Waiting for Phantom…" : `Sign in browser (${short(publicKey.toBase58(), 4)})`}
                 </button>
@@ -207,7 +207,7 @@ export default function ApprovalModal({
                 {phase.kind === "submitted"
                   ? `Submitted ${short(phase.signature, 8)}. Confirming onchain…`
                   : phase.kind === "error"
-                    ? <span className="text-red-400">{phase.message}</span>
+                    ? <span className="text-[var(--acc-block)]">{phase.message}</span>
                     : checkNote
                       ? <span className="text-amber-400">{checkNote}</span>
                       : `Waiting for signature… (checking every ${POLL_MS / 1000}s)`}
