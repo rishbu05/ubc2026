@@ -200,3 +200,13 @@ export function placeOrder(
     ...(opts.makerOrCancel !== undefined && { makerOrCancel: opts.makerOrCancel }),
   });
 }
+
+/** POST /v1/prediction-markets/orders/active (signed, read-only). */
+export function listActiveOrders(symbol?: string) {
+  return privatePost<unknown>("/v1/prediction-markets/orders/active", symbol ? { symbol } : {});
+}
+
+/** POST /v1/prediction-markets/positions (signed, read-only). */
+export function listPositions() {
+  return privatePost<unknown>("/v1/prediction-markets/positions", {});
+}

@@ -34,6 +34,8 @@ transaction request.
 
 ```
 app/api/paid/odds-history|news|analysis   x402-protected ($0.01 / $0.02 / $0.05 devnet USDC). Prices live in lib/x402.ts PAID_PRICES.
+                           odds-history reads Supabase odds_snapshots: ?symbol= | ?event_ticker= (default FED261211), &since=ISO, &limit=1-5000.
+                           Params are validated BEFORE the paywall (bad request = 400, no charge).
 app/api/agent/run          Agent loop stub (reads Gemini prediction markets).
 app/api/agent/topup        GET delegation status / POST delegate top-up (owner, amountUsdc, reason). Requires x-agent-secret.
 app/api/approve            POST create approval -> { id, reference, url: solana:... }. Requires x-agent-secret.
@@ -46,8 +48,12 @@ lib/circle.ts       Circle client; agentKitSigner() (x402) and agentWeb3Signer()
 lib/solana.ts       Client-safe devnet helpers: connection, USDC mint, CAIP-2 id, memoInstruction, agentAddress, explorerTxUrl.
 proxy.ts            Next 16 proxy (ex-middleware): enforces x-agent-secret on protected routes. Fails closed if unset.
 lib/internalAuth.ts Which routes need AGENT_INTERNAL_SECRET (requiresInternalSecret), safeEqual, internalHeaders().
-lib/policy.ts       Pure policy logic: per-tx max, daily limit, approval threshold, host allowlist.
-lib/gemini.ts       Gemini EXCHANGE Prediction Markets client: listActiveEvents, getEvent, getOrderBook, placeOrder.
+lib/policy.ts       Pure policy: evaluate(policy, {amountUsdc, kind: 'data'|'trade', spentTodayUsdc, resourceUrl}).
+                    data: per-call max (0.10). Both kinds: daily limit (5.00). Trades always need approval (POLICY_TRADES_REQUIRE_APPROVAL);
+                    otherwise approval above threshold (2.00). `kind` defaults to 'data'.
+lib/odds.ts         odds_snapshots reader (partner's recorder writes one row per contract per minute).
+lib/gemini.ts       Gemini EXCHANGE Prediction Markets client: listActiveEvents, getEvent, getOrderBook, placeOrder,
+                    listActiveOrders, listPositions (signed, read-only).
 lib/x402.ts         Shared x402ResourceServer (ExactSvmScheme on devnet), PAID_PRICES, paidRoute().
 lib/supabase.ts     Browser (anon) and admin (service role) Supabase clients.
 components/WalletProviders.tsx  Wallet adapter providers (Phantom, Solflare) on devnet, wrapped in app/layout.tsx.
@@ -87,6 +93,15 @@ supabase/migrations/0001_approvals.sql  approvals table. Apply in the Supabase S
   to a 0-lamport self-transfer, and the memo instruction lists only the user as signer.
   The memo text is `approvalMemo()`: `approve #<id>: <description>`, truncated to 200 chars.
 - Devnet RPC airdrops are closed. Get SOL from https://faucet.solana.com and USDC from https://faucet.circle.com.
+
+## Data sources
+
+- **odds_snapshots** (Supabase): the partner's recorder writes ts, event_ticker, symbol, label, bid, ask, last, mid,
+  raw every minute, from **Gemini PRODUCTION** public market data (api.gemini.com). `mid` is a float, so round it for display.
+- **Sandbox vs production:** FED261211 exists only on Gemini production (404 on sandbox). `placeOrder` uses
+  `GEMINI_API_BASE_URL` (sandbox), so you cannot trade the recorded events in sandbox. Decide before wiring trades.
+- **approvals** (Supabase): created by `supabase/migrations/0001_approvals.sql`. Run it in the SQL editor if missing,
+  then `NOTIFY pgrst, 'reload schema';`.
 
 ## Gemini Prediction Markets (lib/gemini.ts)
 
