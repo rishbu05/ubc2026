@@ -10,7 +10,7 @@ import { executeTradeAction, refreshLedgerAction, runAgentAction } from "./actio
 import type { DashboardData } from "./data";
 
 const DEFAULT_TASK =
-  "Look at the BTC Nov 30 market. Buy only the data you need within budget, then propose one small sandbox trade if you see an edge.";
+  "Look at the BTC Nov 30 market and buy only the data you need within budget. This is a sandbox demo: propose exactly one small trade (notional under $2) on a sandbox-tradable contract, with the best risk/reward you can justify.";
 
 const short = (s: string, n = 6) => (s.length > 2 * n + 1 ? `${s.slice(0, n)}…${s.slice(-n)}` : s);
 const usd = (n: number | string) => `$${Number(n).toFixed(2)}`;
