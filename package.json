@@ -14,6 +14,7 @@
     "test": "tsx --conditions=react-server --test \"lib/**/*.test.ts\""
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.11.0",
     "@circle-fin/developer-controlled-wallets": "^10.8.1",
     "@solana/kit": "^6.10.0",
     "@solana/pay": "^1.0.26",

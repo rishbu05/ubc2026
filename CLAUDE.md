@@ -38,11 +38,19 @@ app/api/paid/odds-history|news|analysis   x402-protected ($0.01 / $0.02 / $0.05 
                            news: real headlines from Google News RSS (?event_ticker= FED261211|SPXEND26 mapped to a topic, or ?topic=),
                            cached 5 min. DEMO: ?inject=1 or DEMO_INJECTION=true appends a prompt-injection headline (off by default).
                            Params are validated BEFORE the paywall (bad request = 400, no charge).
-app/api/agent/run          Agent loop stub (reads Gemini prediction markets).
+app/api/agent/run          Claude agent loop (lib/agent.ts). POST {task, event_ticker?, approver?}. Requires x-agent-secret.
+app/api/agent/execute      Place the REAL Gemini sandbox order for an onchain-approved proposal (paper fallback). Requires x-agent-secret.
+app/agent                  Dashboard: odds chart, Run agent (server action), step log, ApprovalModal, sandbox order result, ledger.
 app/api/agent/topup        GET delegation status / POST delegate top-up (owner, amountUsdc, reason). Requires x-agent-secret.
 app/api/approve            POST create approval -> { id, reference, url: solana:... }. Requires x-agent-secret.
 app/api/approve/[id]       Solana Pay transaction request: GET label/icon, POST { account } -> memo tx to sign.
 app/api/approve/[id]/check GET: find the signed approval onchain, verify it, mark approved in Supabase. Safe to poll.
+lib/agent.ts        runAgent(): claude-opus-5-5 Tool Runner (effort medium, fallbacks "default"). Tools: get_market, buy_odds_history,
+                    buy_news, buy_analysis (all paid via policyFetch), propose_trade. News is treated as untrusted data.
+lib/trade.ts        validateOrder (sandbox specs), proposeTrade (policy kind trade + approval), executeApprovedTrade.
+lib/ledger.ts       (partner) getSpentToday / recordSpend on spend_ledger. Executed sandbox trades: status paid, amount 0.
+lib/policyFetch.ts  (partner) agentFetch + policy + ledger + approvals. Use this, not agentFetch, for agent spending.
+lib/markets.ts      Demo markets; DEFAULT_EVENT_TICKER = BTC2611302200 (same symbols on production and sandbox).
 lib/agentPay.ts     agentFetch(): pays 402s from the Circle wallet, retries, returns { response, payment: { txSignature, explorerUrl } }.
 lib/delegate.ts     getDelegation(), topUpFromDelegate(): transferChecked as SPL delegate + Memo(reason), signed via Circle.
 lib/approvals.ts    createApproval, buildApprovalTransaction, verifyApprovalOnchain (no DB), checkApproval (DB update).
@@ -129,7 +137,9 @@ supabase/migrations/0001_approvals.sql  approvals table. Apply in the Supabase S
 
 ## Conventions
 
-- `lib/policy.ts` is owned by the partner. Don't edit it from dev-a work without asking.
+- `lib/policy.ts` is owned by the partner; only the agreed tradesRequireApproval addition lives there. Run `npm test` after any change.
+- Gemini: market data from PRODUCTION (`GEMINI_MARKET_DATA_URL`), orders ONLY on SANDBOX (`GEMINI_API_BASE_URL`).
+  Order ids exceed 2^53: keep them as strings (lib/gemini.ts parses them losslessly).
 
 - **Internal auth:** `/api/agent/*` (all methods) and `POST /api/approve` require header
   `x-agent-secret: $AGENT_INTERNAL_SECRET`, enforced centrally in `proxy.ts`. New `/api/agent/*` routes are
