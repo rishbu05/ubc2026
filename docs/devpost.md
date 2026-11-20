@@ -30,7 +30,8 @@ We also built a **prompt-injection demo**. The paid news feed can slip in a host
 - **Gemini Prediction Markets API** (the Gemini crypto exchange): public market data from production, signed orders on the sandbox only.
 - **Supabase** stores approvals and the spend ledger. A per-minute odds recorder also writes every contract's bid, ask and last price, which powers the odds-history endpoint.
 - **The policy engine is a pure function**, unit tested for allowed calls, blocked endpoints, the per-call max, the daily cap, approval thresholds and trades.
-- [TODO: agent loop: which LLM, which tools, how results are streamed to the UI]
+- **Claude** (Anthropic API) runs the agent, using tool calling to read markets, buy data and propose trades.
+- [TODO: agent loop details: tools, step limit, how results are streamed to the UI]
 
 ## Challenges we ran into
 
@@ -63,7 +64,7 @@ We also built a **prompt-injection demo**. The paid news feed can slip in a host
 
 ## Built with
 
-`solana` · `x402` · `circle` · `usdc` · `solana-pay` · `spl-token` · `next.js` · `typescript` · `vercel` · `supabase` · `gemini-prediction-markets` · `phantom` · [TODO: LLM provider]
+`solana` · `x402` · `circle` · `usdc` · `solana-pay` · `spl-token` · `next.js` · `typescript` · `vercel` · `supabase` · `gemini-prediction-markets` · `phantom` · `claude` · `anthropic`
 
 ---
 

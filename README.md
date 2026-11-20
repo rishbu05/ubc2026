@@ -18,7 +18,7 @@ And anything the agent reads, like a news headline, can try to talk it into spen
 
 ## What allowance does
 
-You ask the agent a question about a prediction market (demo: **FED261211**, *"Fed decision in December?"*,
+You ask the agent, Claude with tool calling, a question about a prediction market (demo: **FED261211**, *"Fed decision in December?"*,
 and **BTC2611302200**, *"BTC price on November 30"*). The agent:
 
 1. **Reads the market for free** from Gemini's Prediction Markets API.
@@ -78,6 +78,7 @@ Bad parameters return 400 *before* the paywall, so a malformed request is never 
 
 ## Stack
 
+- **Claude** (Anthropic API) with tool calling: the agent
 - **Solana devnet**: `@solana/web3.js`, `@solana/kit`, `@solana/spl-token`
 - **x402** (`@x402/next`, `@x402/core`, `@x402/svm` pinned to 2.28.0): HTTP 402 payments; the facilitator pays fees
 - **Circle Developer-Controlled Wallets**: the agent's wallet (`SOL-DEVNET`); keys never touch our server
@@ -89,7 +90,7 @@ Bad parameters return 400 *before* the paywall, so a malformed request is never 
 
 ## Run it locally
 
-You need Node 20+, a Supabase project, a Circle developer account, and Phantom set to devnet.
+You need Node 20+, a Supabase project, a Circle developer account, an Anthropic API key, and Phantom set to devnet.
 
 ```bash
 npm install
