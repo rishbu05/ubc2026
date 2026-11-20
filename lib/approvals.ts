@@ -9,7 +9,10 @@
 import "server-only";
 import { Keypair, PublicKey, SystemProgram, Transaction, type ParsedInstruction } from "@solana/web3.js";
 import { address, createSolanaRpc } from "@solana/kit";
-import { encodeURL, findReference, FindReferenceError } from "@solana/pay";
+import { findReference, FindReferenceError } from "@solana/pay";
+import { approvalLink, approvalMemo } from "./solanaPay";
+
+export { approvalLink, approvalMemo, solanaPayBaseUrl } from "./solanaPay";
 import { supabaseAdmin } from "./supabase";
 import { MEMO_PROGRAM_ID, RPC_URL, explorerTxUrl, getConnection, memoInstruction } from "./solana";
 
@@ -24,28 +27,6 @@ export interface Approval {
   signature: string | null;
   created_at: string;
   approved_at: string | null;
-}
-
-const MAX_MEMO = 200;
-
-export function approvalMemo(a: Pick<Approval, "id" | "description">): string {
-  return `approve #${a.id}: ${a.description}`.slice(0, MAX_MEMO);
-}
-
-/**
- * Public base URL for Solana Pay links. Wallets (Phantom) must be able to reach it, so it should
- * be the deployed URL even when running locally. Falls back to NEXT_PUBLIC_APP_URL.
- */
-export function solanaPayBaseUrl(): string {
-  return process.env.SOLANA_PAY_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-}
-
-export function approvalLink(id: number): string {
-  return encodeURL({
-    link: new URL(`/api/approve/${id}`, solanaPayBaseUrl()),
-    label: "Allowance",
-    message: `Approve agent request #${id}`,
-  }).toString();
 }
 
 export async function createApproval(input: {

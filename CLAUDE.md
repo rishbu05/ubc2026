@@ -35,6 +35,8 @@ transaction request.
 ```
 app/api/paid/odds-history|news|analysis   x402-protected ($0.01 / $0.02 / $0.05 devnet USDC). Prices live in lib/x402.ts PAID_PRICES.
                            odds-history reads Supabase odds_snapshots: ?symbol= | ?event_ticker= (default FED261211), &since=ISO, &limit=1-5000.
+                           news: real headlines from Google News RSS (?event_ticker= FED261211|SPXEND26 mapped to a topic, or ?topic=),
+                           cached 5 min. DEMO: ?inject=1 or DEMO_INJECTION=true appends a prompt-injection headline (off by default).
                            Params are validated BEFORE the paywall (bad request = 400, no charge).
 app/api/agent/run          Agent loop stub (reads Gemini prediction markets).
 app/api/agent/topup        GET delegation status / POST delegate top-up (owner, amountUsdc, reason). Requires x-agent-secret.
@@ -51,12 +53,16 @@ lib/internalAuth.ts Which routes need AGENT_INTERNAL_SECRET (requiresInternalSec
 lib/policy.ts       Pure policy: evaluate(policy, {amountUsdc, kind: 'data'|'trade', spentTodayUsdc, resourceUrl}).
                     data: per-call max (0.10). Both kinds: daily limit (5.00). Trades always need approval (POLICY_TRADES_REQUIRE_APPROVAL);
                     otherwise approval above threshold (2.00). `kind` defaults to 'data'.
+lib/news.ts         Google News RSS fetch/parse, EVENT_TOPICS map, injectionHeadline() (demo only).
+lib/solanaPay.ts    Client-safe: approvalLink(), approvalMemo(), solanaPayBaseUrl() (NEXT_PUBLIC_SOLANA_PAY_BASE_URL). Re-exported by lib/approvals.ts.
 lib/odds.ts         odds_snapshots reader (partner's recorder writes one row per contract per minute).
 lib/gemini.ts       Gemini EXCHANGE Prediction Markets client: listActiveEvents, getEvent, getOrderBook, placeOrder,
                     listActiveOrders, listPositions (signed, read-only).
 lib/x402.ts         Shared x402ResourceServer (ExactSvmScheme on devnet), PAID_PRICES, paidRoute().
 lib/supabase.ts     Browser (anon) and admin (service role) Supabase clients.
 components/WalletProviders.tsx  Wallet adapter providers (Phantom, Solflare) on devnet, wrapped in app/layout.tsx.
+components/ApprovalModal.tsx    Approval UI: Solana Pay QR (Phantom mobile) + 'Sign in browser' (extension); polls /check every 2s.
+app/dev/approval    Test page for ApprovalModal (server action creates a TEST: approval). 404 unless ENABLE_DEV_PAGES=true.
 components/DelegatePanel.tsx    User approve()/revoke() of an N-USDC SPL delegate allowance for the agent (on app/page.tsx).
 scripts/prove-revoked.ts  Demo: skips the server pre-check, Circle-signs the real top-up tx, simulates it (never sends), prints the token program's error. `npm run prove:revoked -- <owner> [amount]`
 scripts/pay-once.ts One end-to-end paid call; prints the Explorer link. `npm run pay:once -- [path]` (needs `npm run dev`).
@@ -123,6 +129,8 @@ supabase/migrations/0001_approvals.sql  approvals table. Apply in the Supabase S
 
 ## Conventions
 
+- `lib/policy.ts` is owned by the partner. Don't edit it from dev-a work without asking.
+
 - **Internal auth:** `/api/agent/*` (all methods) and `POST /api/approve` require header
   `x-agent-secret: $AGENT_INTERNAL_SECRET`, enforced centrally in `proxy.ts`. New `/api/agent/*` routes are
   covered automatically. These stay PUBLIC on purpose: `/api/approve/[id]` (Phantom calls it during Solana Pay),
@@ -148,7 +156,7 @@ supabase/migrations/0001_approvals.sql  approvals table. Apply in the Supabase S
   `printf '%s' "$v" | npx vercel env add NAME --environment production --environment preview [--sensitive|--no-sensitive]`.
   CLI 66+: the 2nd positional argument is a **git branch**, so always use `--environment`.
 - `NEXT_PUBLIC_*` values are inlined at build time, so changing one requires a redeploy.
-- `SOLANA_PAY_BASE_URL` is the deployed URL everywhere (Phantom can't reach localhost), so Solana Pay
+- `NEXT_PUBLIC_SOLANA_PAY_BASE_URL` is the deployed URL everywhere (Phantom can't reach localhost), so Solana Pay
   links work even from local dev.
 
 ## Commands
