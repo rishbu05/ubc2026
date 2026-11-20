@@ -25,11 +25,11 @@ export default function BudgetRing({ spent, cap }: { spent: number; cap: number 
         />
       </svg>
       <div>
-        <div className="text-[10px] uppercase tracking-wide text-slate-500">Budget left today</div>
+        <div className="text-xs uppercase tracking-wide text-slate-500">Budget left today</div>
         <div className="font-mono text-xl tabular-nums text-slate-100" style={{ transition: "color 300ms" }}>
           ${remaining.toFixed(2)}
         </div>
-        <div className="font-mono text-[11px] text-slate-500">of ${cap.toFixed(2)} · spent ${spent.toFixed(2)}</div>
+        <div className="font-mono text-xs text-slate-500">of ${cap.toFixed(2)} · spent ${spent.toFixed(2)}</div>
       </div>
     </div>
   );

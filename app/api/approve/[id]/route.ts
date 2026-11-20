@@ -20,7 +20,7 @@ export async function OPTIONS() {
 
 export async function GET() {
   return NextResponse.json(
-    { label: "Allowance approval", icon: `${solanaPayBaseUrl()}/next.svg` },
+    { label: "Allowance approval", icon: `${solanaPayBaseUrl()}/allowance-icon.svg` },
     { headers: CORS },
   );
 }

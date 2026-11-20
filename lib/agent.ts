@@ -308,7 +308,7 @@ export async function runAgent(opts: { task: string; eventTicker?: string; appro
     eventTicker,
     steps,
     proposal,
-    finalText: finalText || "(no final answer)",
+    finalText: finalText || "The agent finished without writing a summary.",
     stopReason: final.stop_reason,
     spentThisRunUsdc: Math.round(spent * 1e6) / 1e6,
     spentTodayUsdc: await getSpentToday(),

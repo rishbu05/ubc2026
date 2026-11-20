@@ -20,23 +20,13 @@ export default function Logo({ size = 96 }: { size?: number }) {
       whileHover={reduce ? undefined : { rotate: -6, scale: 1.05 }}
       transition={{ type: "spring", stiffness: 260, damping: 18 }}
     >
-      <defs>
-        <linearGradient id="al-coin" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#ffb36b" />
-          <stop offset="1" stopColor="#ff6a1f" />
-        </linearGradient>
-        <linearGradient id="al-ring" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0" stopColor="#a78bfa" />
-          <stop offset="1" stopColor="#ff8a3d" />
-        </linearGradient>
-      </defs>
       <circle cx="48" cy="48" r="40" fill="none" stroke="#1e2d4a" strokeWidth="8" />
       <motion.circle
         cx="48"
         cy="48"
         r="40"
         fill="none"
-        stroke="url(#al-ring)"
+        stroke="#ff8a3d"
         strokeWidth="8"
         strokeLinecap="round"
         transform="rotate(-90 48 48)"
@@ -46,7 +36,7 @@ export default function Logo({ size = 96 }: { size?: number }) {
         cx="48"
         cy="48"
         r="26"
-        fill="url(#al-coin)"
+        fill="#ff8a3d"
         initial={reduce ? false : { scale: 0, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         transition={{ type: "spring", stiffness: 320, damping: 16, delay: reduce ? 0 : 0.35 }}

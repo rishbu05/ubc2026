@@ -78,7 +78,7 @@ export default function DelegatePanel() {
       tx.recentBlockhash = blockhash;
       const signature = await sendTransaction(tx, connection);
       await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, "confirmed");
-      setMessage({ text: `${label} confirmed`, href: explorerTxUrl(signature) });
+      setMessage({ text: `${label}.`, href: explorerTxUrl(signature) });
       setVersion((v) => v + 1);
     } catch (e) {
       setMessage({ text: (e as Error).message, error: true });
@@ -90,7 +90,7 @@ export default function DelegatePanel() {
   function approve() {
     if (!agent) return;
     const n = Number(amount);
-    if (!(n > 0)) return setMessage({ text: "Enter a positive amount", error: true });
+    if (!(n > 0)) return setMessage({ text: "Enter an amount above 0 USDC", error: true });
     send(
       () =>
         new Transaction().add(
@@ -103,12 +103,12 @@ export default function DelegatePanel() {
             USDC_DECIMALS,
           ),
         ),
-      `Approved ${n} USDC`,
+      `The agent can now spend up to ${n} USDC`,
     );
   }
 
   function revoke() {
-    send(() => new Transaction().add(createRevokeInstruction(usdcAta(publicKey!), publicKey!)), "Revoked");
+    send(() => new Transaction().add(createRevokeInstruction(usdcAta(publicKey!), publicKey!)), "The agent can no longer spend your USDC");
   }
 
   if (!agent) {
@@ -119,13 +119,17 @@ export default function DelegatePanel() {
   const agentIsDelegate = status?.delegate === agent.toBase58();
 
   return (
-    <section className="w-full max-w-md space-y-4 rounded-2xl border border-[var(--navy-line)] bg-[var(--navy-1)]/95 p-5 text-slate-100 shadow-2xl shadow-black/30">
+    <section className="w-full max-w-md space-y-4 rounded-2xl border border-[var(--navy-line)] bg-[var(--navy-1)]/95 p-6 text-slate-100 shadow-2xl shadow-black/30">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-lg font-semibold">Agent allowance</h2>
         <WalletMultiButton />
       </div>
 
       <p className="break-all font-mono text-xs text-slate-400">Agent: {agent.toBase58()}</p>
+
+      {publicKey && !status && (
+        <p className="animate-pulse text-sm text-slate-400" aria-live="polite">Checking your USDC balance on devnet…</p>
+      )}
 
       {publicKey && status && (
         <dl className="grid grid-cols-2 gap-y-1 rounded-lg bg-[var(--navy-2)] p-3 text-sm">
@@ -149,22 +153,22 @@ export default function DelegatePanel() {
             step="0.01"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            className="w-28 rounded-md border border-[#2a3b5e] bg-[var(--navy-2)] px-2 py-1.5 font-mono tabular-nums focus:border-[var(--acc-pay)] focus:outline-none"
+            className="w-28 rounded-md border border-[#2a3b5e] bg-[var(--navy-2)] px-2 py-2 font-mono tabular-nums focus:border-[var(--acc-pay)] focus:outline-none"
             aria-label="USDC amount"
           />
           <button
             onClick={approve}
             disabled={busy}
-            className="flex-1 rounded-md bg-[var(--acc-pay)] px-3 py-1.5 font-medium text-[var(--navy-1)] transition hover:brightness-110 active:scale-[0.98] disabled:opacity-50"
+            className="flex-1 rounded-md bg-[var(--acc-pay)] px-3 py-2 font-medium text-[var(--navy-1)] transition hover:brightness-110 active:scale-[0.98] disabled:opacity-50"
           >
-            Approve
+            Let the agent spend this
           </button>
           <button
             onClick={revoke}
             disabled={busy || !status?.delegate}
-            className="rounded-md border border-[var(--acc-block)]/50 px-3 py-1.5 text-[var(--acc-block)] transition hover:bg-[var(--acc-block)]/10 disabled:opacity-50"
+            className="rounded-md border border-[var(--acc-block)]/50 px-3 py-2 text-[var(--acc-block)] transition hover:bg-[var(--acc-block)]/10 disabled:opacity-50"
           >
-            Revoke
+            Revoke access
           </button>
         </div>
       ) : (
@@ -176,7 +180,7 @@ export default function DelegatePanel() {
           {message.text}{" "}
           {message.href && (
             <a href={message.href} target="_blank" rel="noreferrer" className="underline">
-              View on Explorer
+              View transaction
             </a>
           )}
         </p>

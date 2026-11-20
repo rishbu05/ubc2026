@@ -2,6 +2,8 @@
 // Bottom-right toast stack. Kinds map to the accent system:
 // pay = orange, ok = green, block = red (shakes), approval = orange, think = violet.
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ArrowUpRight, Ban, BrainCircuit, CircleCheck, CircleDollarSign, ShieldAlert, X, type LucideIcon } from "lucide-react";
+import Icon from "./Icon";
 
 export type ToastKind = "pay" | "ok" | "block" | "approval" | "think";
 
@@ -14,12 +16,12 @@ export interface Toast {
   leaving?: boolean;
 }
 
-const STYLE: Record<ToastKind, { ring: string; dot: string; label: string }> = {
-  pay: { ring: "border-[var(--acc-pay)]/50", dot: "bg-[var(--acc-pay)]", label: "text-[var(--acc-pay)]" },
-  approval: { ring: "border-[var(--acc-pay)]/50", dot: "bg-[var(--acc-pay)]", label: "text-[var(--acc-pay)]" },
-  ok: { ring: "border-[var(--acc-ok)]/50", dot: "bg-[var(--acc-ok)]", label: "text-[var(--acc-ok)]" },
-  block: { ring: "border-[var(--acc-block)]/60", dot: "bg-[var(--acc-block)]", label: "text-[var(--acc-block)]" },
-  think: { ring: "border-[var(--acc-think)]/50", dot: "bg-[var(--acc-think)]", label: "text-[var(--acc-think)]" },
+const STYLE: Record<ToastKind, { ring: string; icon: LucideIcon; label: string }> = {
+  pay: { ring: "border-[var(--acc-pay)]/50", icon: CircleDollarSign, label: "text-[var(--acc-pay)]" },
+  approval: { ring: "border-[var(--acc-pay)]/50", icon: ShieldAlert, label: "text-[var(--acc-pay)]" },
+  ok: { ring: "border-[var(--acc-ok)]/50", icon: CircleCheck, label: "text-[var(--acc-ok)]" },
+  block: { ring: "border-[var(--acc-block)]/60", icon: Ban, label: "text-[var(--acc-block)]" },
+  think: { ring: "border-[var(--acc-think)]/50", icon: BrainCircuit, label: "text-[var(--acc-think)]" },
 };
 
 export function useToasts() {
@@ -76,18 +78,18 @@ export function ToastStack({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: 
             className={`pointer-events-auto w-full max-w-sm rounded-xl border ${s.ring} bg-[var(--navy-1)]/95 px-4 py-3 shadow-2xl shadow-black/40 backdrop-blur ${anim}`}
           >
             <div className="flex items-start gap-3">
-              <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${s.dot}`} aria-hidden />
+              <Icon as={s.icon} className={`mt-1 ${s.label}`} />
               <div className="min-w-0 flex-1">
                 <p className={`text-sm font-medium ${s.label}`}>{t.title}</p>
-                {t.detail && <p className="mt-0.5 break-words font-mono text-xs text-slate-400">{t.detail}</p>}
+                {t.detail && <p className="mt-1 break-words font-mono text-xs text-slate-400">{t.detail}</p>}
                 {t.href && (
-                  <a href={t.href} target="_blank" rel="noreferrer" className="mt-1 inline-block font-mono text-xs text-slate-200 underline">
-                    View on Explorer ↗
+                  <a href={t.href} target="_blank" rel="noreferrer" className="mt-1 inline-flex items-center gap-1 font-mono text-xs text-slate-200 underline">
+                    View transaction on Solana Explorer <Icon as={ArrowUpRight} />
                   </a>
                 )}
               </div>
-              <button onClick={() => onDismiss(t.id)} className="text-slate-500 hover:text-slate-200" aria-label="Dismiss">
-                ×
+              <button onClick={() => onDismiss(t.id)} className="text-slate-500 hover:text-slate-200" aria-label="Dismiss notification">
+                <Icon as={X} />
               </button>
             </div>
           </div>

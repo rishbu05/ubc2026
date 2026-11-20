@@ -1,7 +1,9 @@
 "use client";
-// Home hero, animated with Motion (motion.dev): drifting glow, staggered wordmark, spring buttons.
+// Home hero, animated with Motion (motion.dev): drawn logo, staggered wordmark, spring buttons. Flat colours only.
 import Link from "next/link";
 import { motion, useReducedMotion, type Variants } from "motion/react";
+import { ArrowRight } from "lucide-react";
+import Icon from "./Icon";
 import Logo from "./Logo";
 
 const WORD = "Allowance";
@@ -31,23 +33,7 @@ export default function Hero() {
   const press = reduce ? {} : { whileHover: { scale: 1.04, y: -1 }, whileTap: { scale: 0.97 } };
 
   return (
-    <section className="relative flex flex-col items-center text-center">
-      {/* drifting background glow */}
-      <motion.div
-        aria-hidden
-        className="pointer-events-none absolute -top-48 left-1/2 -z-10 h-[520px] w-[900px] -translate-x-1/2 rounded-full blur-3xl"
-        style={{ background: "radial-gradient(closest-side, rgb(167 139 250 / 0.35), transparent)" }}
-        animate={reduce ? undefined : { x: [-40, 40, -40], opacity: [0.55, 0.8, 0.55] }}
-        transition={{ duration: 14, repeat: Infinity, ease: "easeInOut" }}
-      />
-      <motion.div
-        aria-hidden
-        className="pointer-events-none absolute -top-24 left-1/2 -z-10 h-[420px] w-[700px] -translate-x-1/3 rounded-full blur-3xl"
-        style={{ background: "radial-gradient(closest-side, rgb(255 138 61 / 0.28), transparent)" }}
-        animate={reduce ? undefined : { x: [30, -50, 30], y: [0, 20, 0] }}
-        transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
-      />
-
+    <section className="relative flex flex-col items-start text-left">
       <Logo size={120} />
 
       <motion.h1
@@ -62,7 +48,7 @@ export default function Hero() {
             key={i}
             aria-hidden
             variants={letter}
-            className="bg-gradient-to-b from-white to-orange-200 bg-clip-text text-transparent last:to-[var(--acc-pay)]"
+            className="text-white"
           >
             {ch}
           </motion.span>
@@ -74,13 +60,13 @@ export default function Hero() {
         every trade waits for your signature.
       </motion.p>
 
-      <motion.div {...fadeUp(0.95)} className="mt-8 flex flex-wrap justify-center gap-3">
+      <motion.div {...fadeUp(0.95)} className="mt-8 flex flex-wrap gap-3">
         <motion.div {...press}>
           <Link
             href="/agent"
-            className="inline-flex items-center gap-2 rounded-xl bg-[var(--acc-pay)] px-6 py-3 text-base font-semibold text-[var(--navy-1)] shadow-lg shadow-orange-500/25"
+            className="inline-flex items-center gap-2 rounded-xl bg-[var(--acc-pay)] px-6 py-3 text-base font-semibold text-[var(--navy-1)]"
           >
-            Watch the agent work →
+            Watch the agent work <Icon as={ArrowRight} />
           </Link>
         </motion.div>
         <motion.div {...press}>
@@ -91,7 +77,7 @@ export default function Hero() {
       </motion.div>
 
       <motion.ul
-        className="mt-8 flex flex-wrap justify-center gap-2 font-mono text-xs text-slate-300"
+        className="mt-8 flex flex-wrap gap-2 font-mono text-xs text-slate-300"
         initial="hidden"
         animate="show"
         variants={{ hidden: {}, show: { transition: { staggerChildren: reduce ? 0 : 0.08, delayChildren: reduce ? 0 : 1.15 } } }}
@@ -101,9 +87,9 @@ export default function Hero() {
             key={p.text}
             variants={{ hidden: reduce ? { opacity: 1 } : { opacity: 0, y: 8, scale: 0.95 }, show: { opacity: 1, y: 0, scale: 1 } }}
             whileHover={reduce ? undefined : { y: -2 }}
-            className="rounded-full border border-[var(--navy-line)] bg-[var(--navy-1)]/80 px-3 py-1.5 backdrop-blur"
+            className="rounded-full border border-[var(--navy-line)] bg-[var(--navy-1)]/80 px-3 py-2 backdrop-blur"
           >
-            <span style={{ color: p.dot }}>●</span> {p.text}
+            <span className="mr-2 inline-block h-2 w-2 rounded-full align-middle" style={{ background: p.dot }} aria-hidden /> {p.text}
           </motion.li>
         ))}
       </motion.ul>
@@ -117,7 +103,7 @@ export function Reveal({ children, id }: { children: React.ReactNode; id?: strin
   return (
     <motion.div
       id={id}
-      className="glow-card relative w-full max-w-md"
+      className="relative w-full max-w-md"
       initial={reduce ? false : { opacity: 0, y: 24 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "-60px" }}

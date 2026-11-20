@@ -8,6 +8,8 @@ import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { Transaction } from "@solana/web3.js";
 import { approvalLink, approvalMemo } from "@/lib/solanaPay";
+import { CircleCheck } from "lucide-react";
+import Icon from "./Icon";
 
 export interface ApprovalResult {
   signature: string;
@@ -97,7 +99,7 @@ export default function ApprovalModal({
           setCheckNote(null);
         }
       } catch {
-        if (!stopped) setCheckNote("Network error while checking; retrying…");
+        if (!stopped) setCheckNote("Couldn’t reach the server. Trying again…");
       }
     };
     const id = setInterval(tick, POLL_MS);
@@ -138,16 +140,16 @@ export default function ApprovalModal({
       aria-labelledby="approval-title"
     >
       <div className="anim-modal-in w-full max-w-md rounded-2xl border border-[var(--acc-pay)]/30 bg-[#0b1426] text-slate-100 shadow-2xl shadow-orange-500/10">
-        <div className="flex items-center justify-between border-b border-[#1e2d4a] px-5 py-4">
-          <h2 id="approval-title" className="text-base font-semibold">
+        <div className="flex items-center justify-between border-b border-[#1e2d4a] px-6 py-4">
+          <h2 id="approval-title" className="text-lg font-semibold text-white">
             Approve agent request
           </h2>
-          <span className="rounded-full bg-orange-500/15 px-2.5 py-0.5 font-mono text-xs text-orange-400">
+          <span className="rounded-full bg-orange-500/15 px-3 py-1 font-mono text-xs text-orange-400">
             #{approvalId}
           </span>
         </div>
 
-        <div className="space-y-4 px-5 py-4">
+        <div className="space-y-4 px-6 py-4">
           <div>
             <p className="text-xs uppercase tracking-wide text-slate-400">Amount</p>
             <p className="font-mono text-3xl font-semibold text-[var(--acc-pay)] tabular-nums">{amountLabel}</p>
@@ -170,7 +172,7 @@ export default function ApprovalModal({
 
           {phase.kind === "approved" ? (
             <div className="anim-pop-in rounded-lg border border-[var(--acc-ok)]/40 bg-[var(--acc-ok)]/10 p-3 text-sm">
-              <p className="font-medium text-[var(--acc-ok)]">Approved onchain ✓</p>
+              <p className="flex items-center gap-2 font-medium text-[var(--acc-ok)]"><Icon as={CircleCheck} /> Approved onchain</p>
               <p className="mt-1 font-mono text-xs text-slate-300">
                 by {short(phase.result.approver)} ·{" "}
                 <a href={phase.result.explorerUrl} target="_blank" rel="noreferrer" className="text-orange-400 underline">
@@ -181,7 +183,10 @@ export default function ApprovalModal({
           ) : (
             <>
               <div className="flex flex-col items-center gap-2">
-                <div ref={qrRef} className="anim-qr-pulse overflow-hidden rounded-xl bg-white p-2 ring-2 ring-[var(--acc-pay)]/70" style={{ width: 248, height: 248 }} />
+                <div className="anim-qr-pulse relative overflow-hidden rounded-xl bg-white p-2 ring-2 ring-[var(--acc-pay)]/70" style={{ width: 248, height: 248 }}>
+                  <span className="absolute inset-0 flex items-center justify-center text-xs text-slate-500">Generating QR code…</span>
+                  <div ref={qrRef} className="relative" />
+                </div>
                 <p className="text-xs text-slate-400">Scan with Phantom mobile (Devnet)</p>
               </div>
 
@@ -193,9 +198,9 @@ export default function ApprovalModal({
                 <button
                   onClick={signInBrowser}
                   disabled={phase.kind === "signing" || phase.kind === "submitted"}
-                  className="w-full rounded-lg bg-[var(--acc-pay)] px-4 py-2.5 font-medium text-[#0b1426] transition hover:brightness-110 active:scale-[0.98] disabled:opacity-50"
+                  className="w-full rounded-lg bg-[var(--acc-pay)] px-4 py-3 font-medium text-[#0b1426] transition hover:brightness-110 active:scale-[0.98] disabled:opacity-50"
                 >
-                  {phase.kind === "signing" ? "Waiting for Phantom…" : `Sign in browser (${short(publicKey.toBase58(), 4)})`}
+                  {phase.kind === "signing" ? "Confirm in Phantom…" : `Approve with Phantom extension (${short(publicKey.toBase58(), 4)})`}
                 </button>
               ) : (
                 <div className="flex justify-center">
@@ -210,19 +215,19 @@ export default function ApprovalModal({
                     ? <span className="text-[var(--acc-block)]">{phase.message}</span>
                     : checkNote
                       ? <span className="text-amber-400">{checkNote}</span>
-                      : `Waiting for signature… (checking every ${POLL_MS / 1000}s)`}
+                      : "Waiting for your signature. This updates on its own."}
               </p>
             </>
           )}
         </div>
 
         {!done && (
-          <div className="flex justify-end gap-2 border-t border-[#1e2d4a] px-5 py-3">
+          <div className="flex justify-end gap-2 border-t border-[#1e2d4a] px-6 py-3">
             <button
               onClick={onRejected}
               className="rounded-lg border border-[#2a3b5e] px-4 py-2 text-sm text-slate-300 hover:bg-[#13213d]"
             >
-              Reject
+              Don’t approve
             </button>
           </div>
         )}

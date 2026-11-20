@@ -28,7 +28,12 @@ export default function OddsChart({ series, title }: { series: ChartSeries[]; ti
   }, [s]);
 
   if (s.length === 0 || !Number.isFinite(t0)) {
-    return <p className="text-sm text-slate-400">No price history yet for this market.</p>;
+    return (
+      <div className="rounded-lg border border-dashed border-[var(--navy-line)] p-6">
+        <p className="text-lg font-semibold text-white">{title}</p>
+        <p className="mt-1 text-sm text-slate-400">No price history for this market yet. The recorder adds a point every minute, so check back shortly.</p>
+      </div>
+    );
   }
 
   const x = (t: number) => PAD.l + ((t - t0) / Math.max(1, t1 - t0)) * (W - PAD.l - PAD.r);
@@ -61,7 +66,7 @@ export default function OddsChart({ series, title }: { series: ChartSeries[]; ti
   return (
     <figure className="space-y-2">
       <figcaption className="flex flex-wrap items-center justify-between gap-2">
-        <span className="text-sm font-medium text-slate-200">{title}</span>
+        <span className="text-lg font-semibold text-white">{title}</span>
         <button onClick={() => setShowTable((v) => !v)} className="text-xs text-slate-400 underline hover:text-slate-200">
           {showTable ? "Show chart" : "Show table"}
         </button>
@@ -69,7 +74,7 @@ export default function OddsChart({ series, title }: { series: ChartSeries[]; ti
 
       <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-300" aria-label="Legend">
         {s.map((ser, i) => (
-          <li key={ser.symbol} className="flex items-center gap-1.5">
+          <li key={ser.symbol} className="flex items-center gap-2">
             <span className="inline-block h-0.5 w-4 rounded" style={{ background: COLORS[i] }} />
             {ser.label}
           </li>
@@ -144,14 +149,14 @@ export default function OddsChart({ series, title }: { series: ChartSeries[]; ti
           </svg>
           {hoverT !== null && (
             <div
-              className="pointer-events-none absolute top-2 rounded-md border border-[#2a3b5e] bg-[#0f1b33]/95 px-2 py-1.5 font-mono text-[11px] text-slate-200 shadow-lg"
+              className="pointer-events-none absolute top-2 rounded-md border border-[#2a3b5e] bg-[#0f1b33]/95 px-2 py-2 font-mono text-xs text-slate-200 shadow-lg"
               style={{ left: `${Math.min(70, (x(hoverT) / W) * 100)}%` }}
             >
-              <div className="mb-0.5 text-slate-400">{hhmm(hoverT)}</div>
+              <div className="mb-1 text-slate-400">{hhmm(hoverT)}</div>
               {s.map((ser, i) => {
                 const p = nearest(ser.points, hoverT);
                 return (
-                  <div key={ser.symbol} className="flex items-center gap-1.5">
+                  <div key={ser.symbol} className="flex items-center gap-2">
                     <span className="inline-block h-2 w-2 rounded-full" style={{ background: COLORS[i] }} />
                     <span className="text-slate-300">{ser.label}</span>
                     <span className="ml-auto pl-2 tabular-nums">{pct(p.v)}</span>
@@ -163,7 +168,7 @@ export default function OddsChart({ series, title }: { series: ChartSeries[]; ti
           )}
         </div>
       )}
-      <p className="text-[11px] text-slate-500">
+      <p className="text-xs text-slate-500">
         Gemini production data. History: 15-min candles (last trade) and recorder snapshots; latest point: live order-book mid.
       </p>
     </figure>
