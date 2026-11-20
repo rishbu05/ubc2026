@@ -1,6 +1,7 @@
 // Global rate limit for agent runs (both /api/agent/run and the /agent page). Server-only.
 // Backed by Supabase `agent_runs` (supabase/migrations/0003_agent_runs.sql) so it holds across
-// serverless instances. Fails CLOSED if the table is missing: no limiter, no runs.
+// serverless instances. If the table is missing it fails OPEN to a per-instance in-memory limit
+// (same 30s interval and daily cap, but per server instance) so the demo keeps working.
 import "server-only";
 import { supabaseAdmin } from "./supabase";
 
@@ -22,14 +23,29 @@ function startOfUtcDay(now: Date): Date {
 
 const MISSING_TABLE = new Set(["PGRST205", "42P01"]);
 
+// In-memory fallback (per instance) used only when agent_runs is unavailable.
+const mem = { lastStartMs: 0, day: "", count: 0 };
+function acquireInMemory(now: Date): AcquireResult {
+  const day = now.toISOString().slice(0, 10);
+  if (mem.day !== day) Object.assign(mem, { day, count: 0 });
+  const sinceS = (now.getTime() - mem.lastStartMs) / 1000;
+  if (sinceS < RUN_INTERVAL_SECONDS) {
+    const wait = Math.ceil(RUN_INTERVAL_SECONDS - sinceS);
+    return { ok: false, reason: `Rate limited: 1 agent run per ${RUN_INTERVAL_SECONDS}s. Try again in ${wait}s.`, retryAfterSeconds: wait };
+  }
+  if (mem.count >= RUNS_PER_DAY) {
+    const wait = Math.ceil((startOfUtcDay(now).getTime() + 86_400_000 - now.getTime()) / 1000);
+    return { ok: false, reason: `Daily limit reached: ${RUNS_PER_DAY} agent runs per day (resets 00:00 UTC).`, retryAfterSeconds: wait };
+  }
+  mem.lastStartMs = now.getTime();
+  mem.count++;
+  console.warn("rateLimit: agent_runs table unavailable, using in-memory per-instance limit");
+  return { ok: true, runId: -1 }; // -1 = not persisted
+}
+
 export async function acquireAgentRun(source: "api" | "page", task: string): Promise<AcquireResult> {
   const db = supabaseAdmin();
   const now = new Date();
-  const notSetUp = {
-    ok: false as const,
-    reason: "Rate limiter not set up: run supabase/migrations/0003_agent_runs.sql in the Supabase SQL editor",
-    retryAfterSeconds: 60,
-  };
 
   // 1) Sliding interval: no run may start within RUN_INTERVAL_SECONDS of the previous one.
   const { data: last, error: lastErr } = await db
@@ -38,7 +54,7 @@ export async function acquireAgentRun(source: "api" | "page", task: string): Pro
     .order("started_at", { ascending: false })
     .limit(1);
   if (lastErr) {
-    if (MISSING_TABLE.has(lastErr.code)) return notSetUp;
+    if (MISSING_TABLE.has(lastErr.code)) return acquireInMemory(now);
     throw new Error(`rate limit check failed: ${lastErr.message}`);
   }
   if (last?.[0]) {
@@ -74,13 +90,14 @@ export async function acquireAgentRun(source: "api" | "page", task: string): Pro
       const wait = Math.max(1, (slot + 1) * slotSeconds - Math.floor(now.getTime() / 1000));
       return { ok: false, reason: `Rate limited: another agent run just started. Try again in ${wait}s.`, retryAfterSeconds: wait };
     }
-    if (MISSING_TABLE.has(insErr.code)) return notSetUp;
+    if (MISSING_TABLE.has(insErr.code)) return acquireInMemory(now);
     throw new Error(`rate limit claim failed: ${insErr.message}`);
   }
   return { ok: true, runId: row.id };
 }
 
 export async function finishAgentRun(runId: number, status: "succeeded" | "failed", error?: string) {
+  if (runId < 0) return; // in-memory fallback run, nothing persisted
   await supabaseAdmin()
     .from("agent_runs")
     .update({ status, finished_at: new Date().toISOString(), error: error?.slice(0, 1000) ?? null })

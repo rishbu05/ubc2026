@@ -51,7 +51,7 @@ lib/agent.ts        runAgent(): claude-opus-5-5 Tool Runner (effort medium, fall
 lib/trade.ts        validateOrder (sandbox specs), proposeTrade (policy kind trade + approval), executeApprovedTrade.
 lib/ledger.ts       (partner) getSpentToday / recordSpend on spend_ledger. Executed sandbox trades: status paid, amount 0.
 lib/policyFetch.ts  (partner) agentFetch + policy + ledger + approvals. Use this, not agentFetch, for agent spending.
-lib/rateLimit.ts    acquireAgentRun/finishAgentRun on Supabase agent_runs (unique 30s slot = atomic). Fails CLOSED if the table is missing.
+lib/rateLimit.ts    acquireAgentRun/finishAgentRun on Supabase agent_runs (unique 30s slot = atomic). Falls back to a per-instance in-memory limit if the table is missing.
 lib/markets.ts      Demo markets; DEFAULT_EVENT_TICKER = BTC2611302200 (same symbols on production and sandbox).
 lib/agentPay.ts     agentFetch(): pays 402s from the Circle wallet, retries, returns { response, payment: { txSignature, explorerUrl } }.
 lib/delegate.ts     getDelegation(), topUpFromDelegate(): transferChecked as SPL delegate + Memo(reason), signed via Circle.

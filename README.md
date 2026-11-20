@@ -151,7 +151,7 @@ cp .env.example .env          # fill in the values; every one is documented in t
 ```
 
 1. **Database.** Run `supabase/migrations/0001_approvals.sql`, `0002_spend_ledger.sql` and `0003_agent_runs.sql`
-   (the agent rate limit; runs are refused until it exists) in the Supabase SQL editor. If the API still says a table is missing afterwards, run `NOTIFY pgrst, 'reload schema';`.
+   (the global agent rate limit; without it a per-instance in-memory limit is used) in the Supabase SQL editor. If the API still says a table is missing afterwards, run `NOTIFY pgrst, 'reload schema';`.
 2. **Wallets.** Run `npm run setup:wallets`. It creates the Circle wallet set, the agent's `SOL-DEVNET` wallet
    and a seller keypair, then prints the values to copy into `.env`.
 3. **Fund the agent wallet** with devnet USDC from https://faucet.circle.com and a little SOL from
