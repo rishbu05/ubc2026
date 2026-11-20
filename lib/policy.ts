@@ -1,41 +1,41 @@
-// Spending policy for the agent's allowance. Pure (no I/O) so it is easy to test.
-// Every spend the agent wants to make is checked here before any money moves.
-//
-// Two kinds of spend:
-//   - "data":  x402 paid API calls (lib/agentPay.ts). Capped per call.
-//   - "trade": prediction-market orders (lib/gemini.ts placeOrder). Not capped per call
-//              (a trade is bigger than a data call), but by default ALWAYS needs human approval.
-// Both count toward the daily limit.
+// Spending policy for the agent's allowance. Pure: no I/O, so it is easy to test.
+// Every purchase the agent wants to make is checked here before any money moves.
 
-export type SpendKind = "data" | "trade";
+export type PolicyAction = "allow" | "block" | "require_approval";
 
-export type PolicyDecision =
-  | { action: "allow" }
-  | { action: "require_approval"; reason: string }
-  | { action: "deny"; reason: string };
+export interface PolicyDecision {
+  action: PolicyAction;
+  reason: string;
+}
 
 export interface Policy {
-  /** Max USDC for a single x402 data call (kind "data"). */
   maxPerCallUsdc: number;
-  /** Max total USDC across all spends in the current day window. */
-  dailyLimitUsdc: number;
-  /** Spends above this need human approval (Solana Pay, app/api/approve/*). */
+  dailyCapUsdc: number;
+  /** Data purchases strictly above this need human approval. */
   approvalThresholdUsdc: number;
-  /** When true, every trade needs human approval regardless of size. */
-  tradesRequireApproval: boolean;
-  /** Optional allowlist of hostnames the agent may pay for data. Empty = any. */
-  allowedHosts: string[];
+  /** URL paths the agent may pay for (our x402 endpoints in app/api/paid/*). */
+  allowedEndpoints: string[];
+  /** Origins (e.g. "https://allowance-chi-nine.vercel.app") those endpoints may live on. Empty = any. */
+  allowedOrigins: string[];
+  /**
+   * Trades (kind "trade") always need human approval when true (default, POLICY_TRADES_REQUIRE_APPROVAL).
+   * When false, a trade needs approval only above approvalThresholdUsdc. maxPerCallUsdc and the endpoint
+   * allowlist apply to data calls only.
+   */
+  tradesRequireApproval?: boolean;
 }
 
 export interface SpendRequest {
   amountUsdc: number;
-  /** Defaults to "data" (backward compatible with x402-only callers). */
-  kind?: SpendKind;
-  /** Required for "data" spends (used for the host allowlist). */
-  resourceUrl?: string;
+  resourceUrl: string;
   /** USDC already spent in the current day window. */
   spentTodayUsdc: number;
+  /** "data" = x402 paid endpoint; "trade" = prediction-market order. Default "data". */
+  kind?: "data" | "trade";
 }
+
+/** Keep in sync with PAID_PRICES in lib/x402.ts. */
+export const PAID_ENDPOINTS = ["/api/paid/odds-history", "/api/paid/news", "/api/paid/analysis"];
 
 function num(name: string, fallback: number): number {
   const v = process.env[name];
@@ -49,50 +49,75 @@ function bool(name: string, fallback: boolean): boolean {
   return v === "true" || v === "1" || v === "yes";
 }
 
+function origins(...urls: (string | undefined)[]): string[] {
+  const out = new Set<string>();
+  for (const u of urls) {
+    if (!u) continue;
+    try {
+      out.add(new URL(u).origin);
+    } catch {
+      /* ignore malformed env */
+    }
+  }
+  return [...out];
+}
+
 export function defaultPolicy(): Policy {
   return {
     maxPerCallUsdc: num("POLICY_MAX_PER_TX_USDC", 0.1),
-    dailyLimitUsdc: num("POLICY_DAILY_LIMIT_USDC", 5),
+    dailyCapUsdc: num("POLICY_DAILY_LIMIT_USDC", 5),
     approvalThresholdUsdc: num("POLICY_APPROVAL_THRESHOLD_USDC", 2),
+    allowedEndpoints: PAID_ENDPOINTS,
+    allowedOrigins: origins(process.env.NEXT_PUBLIC_APP_URL, process.env.NEXT_PUBLIC_SOLANA_PAY_BASE_URL),
     tradesRequireApproval: bool("POLICY_TRADES_REQUIRE_APPROVAL", true),
-    allowedHosts: [],
   };
 }
 
+/** Compare in micro-USDC so 0.7 + 0.3 doesn't read as over 1.0. */
+const micro = (usdc: number) => Math.round(usdc * 1e6);
+
+const block = (reason: string): PolicyDecision => ({ action: "block", reason });
+
 export function evaluate(policy: Policy, req: SpendRequest): PolicyDecision {
-  const kind = req.kind ?? "data";
-  const amt = req.amountUsdc;
+  if (!(req.amountUsdc > 0)) return block("Amount must be positive");
 
-  if (!(amt > 0)) return { action: "deny", reason: "Amount must be positive" };
-
-  if (kind === "data") {
-    if (policy.allowedHosts.length > 0) {
-      if (!req.resourceUrl) return { action: "deny", reason: "resourceUrl required for data spends" };
-      const host = new URL(req.resourceUrl).hostname;
-      if (!policy.allowedHosts.includes(host)) {
-        return { action: "deny", reason: `Host ${host} is not on the allowlist` };
-      }
+  if (req.kind === "trade") {
+    if (policy.tradesRequireApproval ?? true) {
+      return { action: "require_approval", reason: `Trade of ${req.amountUsdc} USDC: all trades need human approval` };
     }
-    if (amt > policy.maxPerCallUsdc) {
-      return { action: "deny", reason: `Data call ${amt} USDC exceeds per-call max ${policy.maxPerCallUsdc}` };
+    if (micro(req.amountUsdc) > micro(policy.approvalThresholdUsdc)) {
+      return { action: "require_approval", reason: `Trade of ${req.amountUsdc} USDC is above approval threshold ${policy.approvalThresholdUsdc}` };
     }
+    return { action: "allow", reason: `Trade within policy (${req.amountUsdc} USDC)` };
   }
 
-  if (req.spentTodayUsdc + amt > policy.dailyLimitUsdc) {
-    return {
-      action: "deny",
-      reason: `Would exceed daily limit ${policy.dailyLimitUsdc} USDC (spent ${req.spentTodayUsdc}, requested ${amt})`,
-    };
+  let url: URL;
+  try {
+    url = new URL(req.resourceUrl);
+  } catch {
+    return block(`Invalid resource URL ${req.resourceUrl}`);
+  }
+  if (policy.allowedOrigins.length > 0 && !policy.allowedOrigins.includes(url.origin)) {
+    return block(`Origin ${url.origin} is not on the allowlist`);
+  }
+  const path = url.pathname.replace(/\/+$/, "");
+  if (!policy.allowedEndpoints.includes(path)) {
+    return block(`Endpoint ${path} is not on the allowlist`);
   }
 
-  if (kind === "trade" && policy.tradesRequireApproval) {
-    return { action: "require_approval", reason: "All trades require human approval" };
+  if (micro(req.amountUsdc) > micro(policy.maxPerCallUsdc)) {
+    return block(`Amount ${req.amountUsdc} exceeds per-call max ${policy.maxPerCallUsdc}`);
   }
-  if (amt > policy.approvalThresholdUsdc) {
+  if (micro(req.spentTodayUsdc) + micro(req.amountUsdc) > micro(policy.dailyCapUsdc)) {
+    return block(
+      `Would exceed daily cap ${policy.dailyCapUsdc} (spent ${req.spentTodayUsdc}, asking ${req.amountUsdc})`,
+    );
+  }
+  if (micro(req.amountUsdc) > micro(policy.approvalThresholdUsdc)) {
     return {
       action: "require_approval",
-      reason: `${amt} USDC is above the approval threshold ${policy.approvalThresholdUsdc}`,
+      reason: `Amount ${req.amountUsdc} is above approval threshold ${policy.approvalThresholdUsdc}`,
     };
   }
-  return { action: "allow" };
+  return { action: "allow", reason: `Within policy (${req.amountUsdc} USDC)` };
 }

@@ -9,7 +9,9 @@
     "lint": "eslint",
     "pay:once": "tsx --conditions=react-server --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/pay-once.ts",
     "setup:wallets": "tsx --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/setup-wallets.ts",
-    "prove:revoked": "tsx --conditions=react-server --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/prove-revoked.ts"
+    "prove:revoked": "tsx --conditions=react-server --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/prove-revoked.ts",
+    "ledger:smoke": "tsx --conditions=react-server --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/ledger-smoke.ts",
+    "test": "tsx --conditions=react-server --test \"lib/**/*.test.ts\""
   },
   "dependencies": {
     "@circle-fin/developer-controlled-wallets": "^10.8.1",
