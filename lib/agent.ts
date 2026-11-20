@@ -316,3 +316,24 @@ export async function runAgent(opts: { task: string; eventTicker?: string; appro
     ms: Date.now() - t0,
   };
 }
+
+/**
+ * Rate-limited entry point used by BOTH /api/agent/run and the /agent page (lib/rateLimit.ts):
+ * max 1 run per 30s and 30 runs per UTC day, shared across serverless instances.
+ */
+export async function runAgentRateLimited(
+  source: "api" | "page",
+  opts: { task: string; eventTicker?: string; approver?: string },
+): Promise<{ ok: true; result: AgentRunResult } | { ok: false; limited: true; reason: string; retryAfterSeconds: number }> {
+  const { acquireAgentRun, finishAgentRun } = await import("./rateLimit");
+  const slot = await acquireAgentRun(source, opts.task);
+  if (!slot.ok) return { ok: false, limited: true, reason: slot.reason, retryAfterSeconds: slot.retryAfterSeconds };
+  try {
+    const result = await runAgent(opts);
+    await finishAgentRun(slot.runId, "succeeded");
+    return { ok: true, result };
+  } catch (e) {
+    await finishAgentRun(slot.runId, "failed", (e as Error).message);
+    throw e;
+  }
+}

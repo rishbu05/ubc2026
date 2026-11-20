@@ -2,7 +2,7 @@
 // Server actions for the /agent page. The browser never sees AGENT_INTERNAL_SECRET; these run the
 // same libs as /api/agent/* on the server. Spend is bounded by the policy's daily cap.
 import { PublicKey } from "@solana/web3.js";
-import { runAgent, type AgentRunResult } from "@/lib/agent";
+import { runAgentRateLimited, type AgentRunResult } from "@/lib/agent";
 import { executeApprovedTrade, type ExecutionResult, type TradeOrder } from "@/lib/trade";
 import { getSpentToday } from "@/lib/ledger";
 import { recentLedger, type LedgerRow } from "./data";
@@ -21,7 +21,8 @@ export async function runAgentAction(input: {
     }
   }
   try {
-    return { ok: true, result: await runAgent({ task, approver: input.approver }) };
+    const r = await runAgentRateLimited("page", { task, approver: input.approver });
+    return r.ok ? { ok: true, result: r.result } : { ok: false, error: r.reason };
   } catch (e) {
     // Server action errors are masked in production; return the message explicitly.
     return { ok: false, error: (e as Error).message };

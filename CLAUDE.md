@@ -39,6 +39,7 @@ app/api/paid/odds-history|news|analysis   x402-protected ($0.01 / $0.02 / $0.05 
                            cached 5 min. DEMO: ?inject=1 or DEMO_INJECTION=true appends a prompt-injection headline (off by default).
                            Params are validated BEFORE the paywall (bad request = 400, no charge).
 app/api/agent/run          Claude agent loop (lib/agent.ts). POST {task, event_ticker?, approver?}. Requires x-agent-secret.
+                           Rate limited with the /agent page (lib/rateLimit.ts, table agent_runs): 1 run/30s, 30/day -> 429.
 app/api/agent/execute      Place the REAL Gemini sandbox order for an onchain-approved proposal (paper fallback). Requires x-agent-secret.
 app/agent                  Dashboard: odds chart, Run agent (server action), step log, ApprovalModal, sandbox order result, ledger.
 app/api/agent/topup        GET delegation status / POST delegate top-up (owner, amountUsdc, reason). Requires x-agent-secret.
@@ -50,6 +51,7 @@ lib/agent.ts        runAgent(): claude-opus-5-5 Tool Runner (effort medium, fall
 lib/trade.ts        validateOrder (sandbox specs), proposeTrade (policy kind trade + approval), executeApprovedTrade.
 lib/ledger.ts       (partner) getSpentToday / recordSpend on spend_ledger. Executed sandbox trades: status paid, amount 0.
 lib/policyFetch.ts  (partner) agentFetch + policy + ledger + approvals. Use this, not agentFetch, for agent spending.
+lib/rateLimit.ts    acquireAgentRun/finishAgentRun on Supabase agent_runs (unique 30s slot = atomic). Fails CLOSED if the table is missing.
 lib/markets.ts      Demo markets; DEFAULT_EVENT_TICKER = BTC2611302200 (same symbols on production and sandbox).
 lib/agentPay.ts     agentFetch(): pays 402s from the Circle wallet, retries, returns { response, payment: { txSignature, explorerUrl } }.
 lib/delegate.ts     getDelegation(), topUpFromDelegate(): transferChecked as SPL delegate + Memo(reason), signed via Circle.
